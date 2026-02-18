@@ -41,7 +41,15 @@
     },
     "plugins": [
       "expo-router",
-      "expo-speech-recognition"
+      "expo-speech-recognition",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#F5EFE6"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
