@@ -108,10 +108,13 @@ export default function UploadScreen() {
     } catch (err: any) {
       const msg: string = err.message ?? 'Something went wrong parsing the script.';
       const isOverloaded = msg.includes('529') || msg.includes('overloaded');
+      const isFiltered = msg.includes('content filtering') || msg.includes('content_policy');
       Alert.alert(
-        isOverloaded ? 'Claude is Busy' : 'Parse Error',
+        isOverloaded ? 'Claude is Busy' : isFiltered ? 'PDF Blocked by Content Filter' : 'Parse Error',
         isOverloaded
-          ? 'Anthropic\'s servers are overloaded right now. Wait a moment and try again.'
+          ? "Anthropic's servers are overloaded right now. Wait a moment and try again."
+          : isFiltered
+          ? "This PDF's content is being blocked by Anthropic's safety filter. Try exporting your script as a plain text (.txt) file — that works reliably."
           : msg
       );
       setStep('title');
@@ -275,16 +278,7 @@ async function extractPdfText(apiKey: string, base64: string, title: string): Pr
               },
               {
                 type: 'text',
-                text: `This is a theatre or film script. Extract ALL the text exactly as it appears.
-
-CRITICAL — preserve these formatting details precisely:
-- Character names that appear before dialogue (e.g. "HAMLET", "JULIE:", "Tom:") — keep them on their own line, exactly as capitalised
-- Scene and act headings (e.g. "ACT ONE", "SCENE 2", "INT. KITCHEN - DAY") — keep on their own line
-- Stage directions in parentheses or brackets — keep them
-- Every line of dialogue — keep each speaker's text on its own line(s)
-- Blank lines between speeches — preserve them
-
-Do NOT summarise, paraphrase, or skip any content. Output only the raw extracted text, nothing else.`,
+                text: 'Output the complete text of this document verbatim, preserving all line breaks, capitalisation, and formatting exactly as it appears. Do not summarise or skip anything.',
               },
             ],
           },
