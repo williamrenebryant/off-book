@@ -44,6 +44,17 @@ export default function UploadScreen() {
     if (result.canceled) return;
 
     const asset = result.assets[0];
+
+    // PDFs are sent as base64 — reject files too large for the request
+    const MAX_PDF_BYTES = 8 * 1024 * 1024; // 8 MB
+    if (asset.mimeType !== 'text/plain' && asset.size && asset.size > MAX_PDF_BYTES) {
+      Alert.alert(
+        'PDF Too Large',
+        `This PDF is ${(asset.size / (1024 * 1024)).toFixed(1)} MB. Please use a PDF under 8 MB, or export your script as a .txt file instead.`
+      );
+      return;
+    }
+
     setFileName(asset.name);
     setFileUri(asset.uri);
     setMimeType(asset.mimeType ?? 'application/pdf');
@@ -226,45 +237,45 @@ export default function UploadScreen() {
 }
 
 async function extractPdfText(apiKey: string, base64: string, title: string): Promise<string> {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 8192,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: base64,
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://api.anthropic.com/v1/messages');
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('x-api-key', apiKey);
+    xhr.setRequestHeader('anthropic-version', '2023-06-01');
+    xhr.timeout = 120000;
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const data = JSON.parse(xhr.responseText);
+        resolve(data.content[0].text);
+      } else {
+        reject(new Error(`PDF extraction failed (${xhr.status}): ${xhr.responseText}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network request failed'));
+    xhr.ontimeout = () => reject(new Error('Request timed out — try a smaller PDF or use a .txt file'));
+    xhr.send(
+      JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 8192,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'document',
+                source: { type: 'base64', media_type: 'application/pdf', data: base64 },
               },
-            },
-            {
-              type: 'text',
-              text: 'Please extract ALL the text from this script exactly as it appears, preserving line breaks, character names, stage directions, and formatting. Output only the raw text, nothing else.',
-            },
-          ],
-        },
-      ],
-    }),
+              {
+                type: 'text',
+                text: 'Please extract ALL the text from this script exactly as it appears, preserving line breaks, character names, stage directions, and formatting. Output only the raw text, nothing else.',
+              },
+            ],
+          },
+        ],
+      })
+    );
   });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`PDF extraction failed (${response.status}): ${err}`);
-  }
-
-  const data = await response.json();
-  return data.content[0].text;
 }
 
 function countLines(
