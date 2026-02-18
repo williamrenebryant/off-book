@@ -8,6 +8,7 @@ import {
   ScrollView,
   Animated,
   Alert,
+  Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,14 +18,21 @@ import {
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
 import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
-import { getScript, getProgress, saveProgress, initProgress, getSettings } from '@/lib/storage';
+import { getScript, getProgress, saveProgress, initProgress, getSettings, saveScript } from '@/lib/storage';
 import { evaluateLine, getHint, getCoachingQuestion } from '@/lib/claude';
-import { Script, Scene, Line, ScriptProgress, FeedbackResult, AppSettings } from '@/types';
+import { Script, Scene, Line, ScriptProgress, LineProgress, FeedbackResult, AppSettings } from '@/types';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import ProgressBar from '@/components/ui/ProgressBar';
 
-type PracticeState = 'cue' | 'listening' | 'evaluating' | 'feedback' | 'complete';
+type PracticeState =
+  | 'practice_idle'
+  | 'practice_speaking'
+  | 'cue'
+  | 'listening'
+  | 'evaluating'
+  | 'feedback'
+  | 'complete';
 
 export default function PracticeScreen() {
   const { id, sceneId } = useLocalSearchParams<{ id: string; sceneId: string }>();
@@ -35,7 +43,7 @@ export default function PracticeScreen() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [myLines, setMyLines] = useState<Line[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [practiceState, setPracticeState] = useState<PracticeState>('cue');
+  const [practiceState, setPracticeState] = useState<PracticeState>('practice_idle');
   const [transcript, setTranscript] = useState('');
   const [feedback, setFeedback] = useState<FeedbackResult | null>(null);
   const [hintLevel, setHintLevel] = useState<0 | 1 | 2 | 3>(0);
@@ -43,20 +51,65 @@ export default function PracticeScreen() {
   const [progress, setProgress] = useState<ScriptProgress | null>(null);
   const [coachingQuestion, setCoachingQuestion] = useState('');
   const [showLine, setShowLine] = useState(false);
+  const [lineModes, setLineModes] = useState<Record<string, 'practice' | 'test'>>({});
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseRef = useRef<Animated.CompositeAnimation | null>(null);
 
+  // Avoid stale closures in speech event handlers
+  const practiceStateRef = useRef<PracticeState>('practice_idle');
+  const currentLineRef = useRef<Line | null>(null);
+
+  // Transcript tracking
+  const interimTranscriptRef = useRef('');
+  const finalTranscriptRef = useRef('');
+  const hasFinalRef = useRef(false);
+
+  // Timing
+  const listeningStartRef = useRef<number | null>(null);
+  const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const setPracticeStateAndRef = (s: PracticeState) => {
+    practiceStateRef.current = s;
+    setPracticeState(s);
+  };
+
+  useEffect(() => {
+    currentLineRef.current = myLines[currentIndex] ?? null;
+  }, [myLines, currentIndex]);
+
   useSpeechRecognitionEvent('result', (event) => {
     const text = event.results[0]?.transcript ?? '';
     setTranscript(text);
+    interimTranscriptRef.current = text;
+    if (event.isFinal) {
+      hasFinalRef.current = true;
+      finalTranscriptRef.current = text;
+    }
   });
 
   useSpeechRecognitionEvent('end', () => {
-    if (practiceState === 'listening' && transcript) {
-      handleEvaluate(transcript);
-    } else if (practiceState === 'listening') {
-      setPracticeState('cue');
+    const state = practiceStateRef.current;
+    if (autoStopTimerRef.current) {
+      clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = null;
+    }
+    stopPulse();
+
+    if (state === 'practice_speaking') {
+      if (listeningStartRef.current) {
+        const dur = Date.now() - listeningStartRef.current;
+        listeningStartRef.current = null;
+        updateLineProgress(currentLineRef.current!.id, { practiceDuration: dur });
+      }
+      setPracticeStateAndRef('practice_idle');
+    } else if (state === 'listening') {
+      const best = hasFinalRef.current ? finalTranscriptRef.current : interimTranscriptRef.current;
+      if (best) {
+        handleEvaluate(best);
+      } else {
+        setPracticeStateAndRef('cue');
+      }
     }
   });
 
@@ -75,7 +128,18 @@ export default function PracticeScreen() {
         const lines = foundScene.lines.filter((l) => l.character === s.selectedCharacter);
         setMyLines(lines);
 
-        setProgress(p ?? initProgress(s.id, s.selectedCharacter ?? ''));
+        const resolvedProgress = p ?? initProgress(s.id, s.selectedCharacter ?? '');
+        setProgress(resolvedProgress);
+
+        const modes: Record<string, 'practice' | 'test'> = {};
+        lines.forEach(l => {
+          modes[l.id] = resolvedProgress.sceneProgress[sceneId]?.lineProgress[l.id]?.readyForTest
+            ? 'test' : 'practice';
+        });
+        setLineModes(modes);
+
+        const firstMode = modes[lines[0]?.id] ?? 'practice';
+        setPracticeStateAndRef(firstMode === 'test' ? 'cue' : 'practice_idle');
       }
     );
   }, [id, sceneId]);
@@ -84,12 +148,14 @@ export default function PracticeScreen() {
     return () => {
       Speech.stop();
       ExpoSpeechRecognitionModule.stop();
+      if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
     };
   }, []);
 
   const currentLine = myLines[currentIndex];
+  const currentMode = lineModes[currentLine?.id ?? ''] ?? 'practice';
 
-  const startListening = async () => {
+  const startListening = async (mode: 'practice' | 'test') => {
     const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!perm.granted) {
       Alert.alert(
@@ -100,8 +166,23 @@ export default function PracticeScreen() {
     }
 
     setTranscript('');
-    setPracticeState('listening');
+    interimTranscriptRef.current = '';
+    finalTranscriptRef.current = '';
+    hasFinalRef.current = false;
     startPulse();
+
+    if (mode === 'practice') {
+      listeningStartRef.current = Date.now();
+      setPracticeStateAndRef('practice_speaking');
+    } else {
+      setPracticeStateAndRef('listening');
+      const pd = progress?.sceneProgress[sceneId]?.lineProgress[currentLine?.id ?? '']?.practiceDuration;
+      if (pd) {
+        autoStopTimerRef.current = setTimeout(() => {
+          ExpoSpeechRecognitionModule.stop();
+        }, pd * 1.5 + 3000);
+      }
+    }
 
     ExpoSpeechRecognitionModule.start({
       lang: settings?.speechLanguage ?? 'en-US',
@@ -111,13 +192,13 @@ export default function PracticeScreen() {
   };
 
   const stopListening = () => {
+    if (autoStopTimerRef.current) {
+      clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = null;
+    }
     stopPulse();
     ExpoSpeechRecognitionModule.stop();
-    if (transcript) {
-      handleEvaluate(transcript);
-    } else {
-      setPracticeState('cue');
-    }
+    // 'end' handler drives the rest
   };
 
   const startPulse = () => {
@@ -135,17 +216,38 @@ export default function PracticeScreen() {
     pulseAnim.setValue(1);
   };
 
+  const updateLineProgress = (lineId: string, updates: Partial<LineProgress>) => {
+    setProgress(prev => {
+      if (!prev) return prev;
+      const sp = prev.sceneProgress[sceneId] ?? { sceneId, lineProgress: {} };
+      const existing = sp.lineProgress[lineId] ?? {
+        lineId, attempts: 0, correctAttempts: 0, lastPracticed: '', mastered: false,
+      };
+      const updated = { ...existing, ...updates, lastPracticed: new Date().toISOString() };
+      const newProgress = {
+        ...prev,
+        lastPracticed: new Date().toISOString(),
+        sceneProgress: {
+          ...prev.sceneProgress,
+          [sceneId]: { ...sp, lineProgress: { ...sp.lineProgress, [lineId]: updated } },
+        },
+      };
+      saveProgress(newProgress);
+      return newProgress;
+    });
+  };
+
   const handleEvaluate = async (spokenText: string) => {
-    if (!currentLine || !settings?.anthropicApiKey) return;
+    if (!currentLineRef.current || !settings?.anthropicApiKey) return;
     stopPulse();
-    setPracticeState('evaluating');
+    setPracticeStateAndRef('evaluating');
 
     try {
       const context = scene?.title ?? '';
       const result = await evaluateLine(
         settings.anthropicApiKey,
         spokenText,
-        currentLine.text,
+        currentLineRef.current.text,
         script?.selectedCharacter ?? '',
         context
       );
@@ -153,66 +255,49 @@ export default function PracticeScreen() {
       setHintText('');
       setHintLevel(0);
       setShowLine(false);
-      setPracticeState('feedback');
-      updateProgress(result);
+      setPracticeStateAndRef('feedback');
+      updateLineProgress(currentLineRef.current.id, {
+        attempts: (progress?.sceneProgress[sceneId]?.lineProgress[currentLineRef.current.id]?.attempts ?? 0) + 1,
+        correctAttempts: (progress?.sceneProgress[sceneId]?.lineProgress[currentLineRef.current.id]?.correctAttempts ?? 0) + (result.score >= 90 ? 1 : 0),
+        mastered: ((progress?.sceneProgress[sceneId]?.lineProgress[currentLineRef.current.id]?.correctAttempts ?? 0) + (result.score >= 90 ? 1 : 0)) >= 3,
+      });
     } catch (err: any) {
       Alert.alert('Error', err.message);
-      setPracticeState('cue');
+      setPracticeStateAndRef('cue');
     }
   };
 
-  const updateProgress = (result: FeedbackResult) => {
-    if (!progress || !currentLine) return;
-    const sceneProgress = progress.sceneProgress[sceneId] ?? {
-      sceneId,
-      lineProgress: {},
-    };
-    const existing = sceneProgress.lineProgress[currentLine.id] ?? {
-      lineId: currentLine.id,
-      attempts: 0,
-      correctAttempts: 0,
-      lastPracticed: '',
-      mastered: false,
-    };
+  const flipToTest = () => {
+    if (!currentLine) return;
+    const newModes = { ...lineModes, [currentLine.id]: 'test' as const };
+    setLineModes(newModes);
+    updateLineProgress(currentLine.id, { readyForTest: true });
+    setPracticeStateAndRef('cue');
+  };
 
-    const updated = {
-      ...existing,
-      attempts: existing.attempts + 1,
-      correctAttempts: existing.correctAttempts + (result.score >= 90 ? 1 : 0),
-      lastPracticed: new Date().toISOString(),
-      mastered: existing.correctAttempts + (result.score >= 90 ? 1 : 0) >= 3,
-    };
-
-    const newProgress: ScriptProgress = {
-      ...progress,
-      lastPracticed: new Date().toISOString(),
-      sceneProgress: {
-        ...progress.sceneProgress,
-        [sceneId]: {
-          ...sceneProgress,
-          lineProgress: {
-            ...sceneProgress.lineProgress,
-            [currentLine.id]: updated,
-          },
-        },
-      },
-    };
-    setProgress(newProgress);
-    saveProgress(newProgress);
+  const flipToPractice = () => {
+    if (!currentLine) return;
+    const newModes = { ...lineModes, [currentLine.id]: 'practice' as const };
+    setLineModes(newModes);
+    updateLineProgress(currentLine.id, { readyForTest: false });
+    setPracticeStateAndRef('practice_idle');
   };
 
   const handleNext = () => {
-    if (currentIndex + 1 >= myLines.length) {
-      setPracticeState('complete');
+    const nextIndex = currentIndex + 1;
+    if (nextIndex >= myLines.length) {
+      setPracticeStateAndRef('complete');
     } else {
-      setCurrentIndex((i) => i + 1);
+      setCurrentIndex(nextIndex);
       setFeedback(null);
       setTranscript('');
       setHintText('');
       setHintLevel(0);
       setShowLine(false);
       setCoachingQuestion('');
-      setPracticeState('cue');
+      const nextLineId = myLines[nextIndex].id;
+      const nextMode = lineModes[nextLineId] ?? 'practice';
+      setPracticeStateAndRef(nextMode === 'test' ? 'cue' : 'practice_idle');
     }
   };
 
@@ -245,6 +330,31 @@ export default function PracticeScreen() {
     } catch {
       setCoachingQuestion('What does your character want in this moment?');
     }
+  };
+
+  const handleEditLine = () => {
+    if (!currentLine || !script) return;
+    Alert.prompt(
+      'Edit Line',
+      'Fix any transcription errors:',
+      (newText) => {
+        if (!newText?.trim() || newText.trim() === currentLine.text) return;
+        const updatedScenes = script.scenes.map(sc => ({
+          ...sc,
+          lines: sc.lines.map(l => l.id === currentLine.id ? { ...l, text: newText.trim() } : l),
+        }));
+        const updatedScript = { ...script, scenes: updatedScenes };
+        setScript(updatedScript);
+        saveScript(updatedScript);
+        setMyLines(prev => prev.map(l => l.id === currentLine.id ? { ...l, text: newText.trim() } : l));
+      },
+      'plain-text',
+      currentLine.text,
+    );
+  };
+
+  const handleViewPdf = () => {
+    if (script?.pdfUri) Linking.openURL(script.pdfUri);
   };
 
   const renderCues = () => {
@@ -307,7 +417,8 @@ export default function PracticeScreen() {
               onPress={() => {
                 setCurrentIndex(0);
                 setFeedback(null);
-                setPracticeState('cue');
+                const firstMode = lineModes[myLines[0]?.id] ?? 'practice';
+                setPracticeStateAndRef(firstMode === 'test' ? 'cue' : 'practice_idle');
               }}
             />
             <Button label="Back to Script" onPress={() => router.back()} />
@@ -325,9 +436,16 @@ export default function PracticeScreen() {
           <Ionicons name="chevron-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerScene} numberOfLines={1}>
-            {scene.title}
-          </Text>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.headerScene} numberOfLines={1}>
+              {scene.title}
+            </Text>
+            {script.pdfUri ? (
+              <TouchableOpacity onPress={handleViewPdf} style={styles.pdfLink}>
+                <Text style={styles.pdfLinkText}>PDF</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
           <Text style={styles.headerProgress}>
             {currentIndex + 1} of {myLines.length}
           </Text>
@@ -349,6 +467,52 @@ export default function PracticeScreen() {
         <View style={styles.yourTurn}>
           <Text style={styles.yourTurnLabel}>{script.selectedCharacter}</Text>
 
+          {/* PRACTICE MODE: idle */}
+          {practiceState === 'practice_idle' && (
+            <>
+              <View style={styles.practiceLineCard}>
+                <Text style={styles.practiceLineText}>{currentLine?.text}</Text>
+                <TouchableOpacity onPress={handleEditLine} style={styles.editBtn}>
+                  <Ionicons name="pencil-outline" size={16} color={Colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+              {transcript ? (
+                <Card style={styles.practiceTranscriptCard}>
+                  <Text style={styles.practiceTranscriptLabel}>You said</Text>
+                  <Text style={styles.practiceTranscriptText}>{transcript}</Text>
+                </Card>
+              ) : (
+                <Text style={styles.yourTurnPrompt}>Read it through, then tap the mic to speak it</Text>
+              )}
+              {coachingQuestion ? (
+                <Card style={styles.coachCard}>
+                  <Ionicons name="help-circle-outline" size={16} color={Colors.accent} />
+                  <Text style={styles.coachQuestion}>{coachingQuestion}</Text>
+                </Card>
+              ) : null}
+            </>
+          )}
+
+          {/* PRACTICE MODE: speaking */}
+          {practiceState === 'practice_speaking' && (
+            <>
+              <View style={styles.practiceLineCard}>
+                <Text style={styles.practiceLineText}>{currentLine?.text}</Text>
+                <TouchableOpacity onPress={handleEditLine} style={styles.editBtn}>
+                  <Ionicons name="pencil-outline" size={16} color={Colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.listeningBox}>
+                {transcript ? (
+                  <Text style={styles.transcriptText}>{transcript}</Text>
+                ) : (
+                  <Text style={styles.listeningPrompt}>Listening...</Text>
+                )}
+              </View>
+            </>
+          )}
+
+          {/* TEST MODE: cue */}
           {practiceState === 'cue' && (
             <>
               {hintText ? (
@@ -361,7 +525,6 @@ export default function PracticeScreen() {
               ) : (
                 <Text style={styles.yourTurnPrompt}>Your turn — when you're ready, tap to speak</Text>
               )}
-
               {coachingQuestion ? (
                 <Card style={styles.coachCard}>
                   <Ionicons name="help-circle-outline" size={16} color={Colors.accent} />
@@ -371,6 +534,7 @@ export default function PracticeScreen() {
             </>
           )}
 
+          {/* TEST MODE: listening */}
           {practiceState === 'listening' && (
             <View style={styles.listeningBox}>
               {transcript ? (
@@ -381,7 +545,7 @@ export default function PracticeScreen() {
             </View>
           )}
 
-          {practiceState === 'evaluating' && (
+          {(practiceState === 'evaluating') && (
             <View style={styles.evaluatingBox}>
               <Text style={styles.evaluatingText}>Checking your line...</Text>
             </View>
@@ -389,7 +553,6 @@ export default function PracticeScreen() {
 
           {practiceState === 'feedback' && feedback && (
             <View style={styles.feedbackContainer}>
-              {/* Score indicator */}
               <View
                 style={[
                   styles.scoreBar,
@@ -409,16 +572,13 @@ export default function PracticeScreen() {
                 <Text style={styles.scoreNum}>{feedback.score}%</Text>
               </View>
 
-              {/* What you said */}
               <Card style={styles.attemptCard}>
                 <Text style={styles.attemptLabel}>You said</Text>
                 <Text style={styles.attemptText}>{transcript}</Text>
               </Card>
 
-              {/* Feedback text */}
               <Text style={styles.feedbackText}>{feedback.feedback}</Text>
 
-              {/* Corrections */}
               {feedback.corrections && (
                 <Card style={styles.correctionCard}>
                   <Text style={styles.correctionLabel}>Correction</Text>
@@ -426,7 +586,6 @@ export default function PracticeScreen() {
                 </Card>
               )}
 
-              {/* Actual line (toggle) */}
               {showLine || feedback.score < 60 ? (
                 <Card style={styles.actualLineCard}>
                   <Text style={styles.actualLineLabel}>The line</Text>
@@ -451,8 +610,55 @@ export default function PracticeScreen() {
 
       {/* Bottom controls */}
       <View style={styles.controls}>
+        {/* PRACTICE IDLE controls */}
+        {practiceState === 'practice_idle' && (
+          <View style={styles.cueControls}>
+            <TouchableOpacity onPress={handleCoachingQuestion} style={styles.coachBtn}>
+              <Ionicons name="help-circle-outline" size={20} color={Colors.accent} />
+              <Text style={styles.coachBtnText}>Why?</Text>
+            </TouchableOpacity>
+
+            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              <TouchableOpacity
+                style={styles.speakBtn}
+                onPress={() => startListening('practice')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="mic" size={28} color={Colors.white} />
+              </TouchableOpacity>
+            </Animated.View>
+
+            <TouchableOpacity onPress={flipToTest} style={styles.testFlipBtn}>
+              <Text style={styles.testFlipText}>Test this</Text>
+              <Text style={styles.testFlipText}>line →</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* PRACTICE SPEAKING: stop button */}
+        {practiceState === 'practice_speaking' && (
+          <TouchableOpacity style={styles.stopBtn} onPress={stopListening} activeOpacity={0.8}>
+            <Ionicons name="stop" size={28} color={Colors.white} />
+          </TouchableOpacity>
+        )}
+
+        {/* TEST CUE controls */}
         {practiceState === 'cue' && (
           <View style={styles.cueControls}>
+            <TouchableOpacity onPress={flipToPractice} style={styles.practiceFlipBtn}>
+              <Text style={styles.practiceFlipText}>← Practice</Text>
+            </TouchableOpacity>
+
+            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              <TouchableOpacity
+                style={styles.speakBtn}
+                onPress={() => startListening('test')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="mic" size={28} color={Colors.white} />
+              </TouchableOpacity>
+            </Animated.View>
+
             <TouchableOpacity onPress={handleHint} style={styles.hintBtn} disabled={hintLevel >= 3}>
               <Ionicons
                 name="bulb-outline"
@@ -465,26 +671,17 @@ export default function PracticeScreen() {
                 {hintLevel === 0 ? 'Hint' : hintLevel === 1 ? 'More' : hintLevel === 2 ? 'Full line' : 'Shown'}
               </Text>
             </TouchableOpacity>
-
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <TouchableOpacity style={styles.speakBtn} onPress={startListening} activeOpacity={0.8}>
-                <Ionicons name="mic" size={28} color={Colors.white} />
-              </TouchableOpacity>
-            </Animated.View>
-
-            <TouchableOpacity onPress={handleCoachingQuestion} style={styles.coachBtn}>
-              <Ionicons name="help-circle-outline" size={20} color={Colors.accent} />
-              <Text style={styles.coachBtnText}>Why?</Text>
-            </TouchableOpacity>
           </View>
         )}
 
+        {/* TEST LISTENING: stop button */}
         {practiceState === 'listening' && (
           <TouchableOpacity style={styles.stopBtn} onPress={stopListening} activeOpacity={0.8}>
             <Ionicons name="stop" size={28} color={Colors.white} />
           </TouchableOpacity>
         )}
 
+        {/* FEEDBACK controls */}
         {practiceState === 'feedback' && (
           <View style={styles.feedbackControls}>
             <Button
@@ -494,7 +691,7 @@ export default function PracticeScreen() {
                 setFeedback(null);
                 setTranscript('');
                 setShowLine(false);
-                setPracticeState('cue');
+                setPracticeStateAndRef(currentMode === 'test' ? 'cue' : 'practice_idle');
               }}
             />
             <Button label="Next Line" onPress={handleNext} />
@@ -528,10 +725,28 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
   headerScene: {
     fontSize: FontSize.md,
     fontWeight: '600',
     color: Colors.text,
+  },
+  pdfLink: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  pdfLinkText: {
+    fontSize: FontSize.xs,
+    color: Colors.accent,
+    fontWeight: '600',
   },
   headerProgress: {
     fontSize: FontSize.xs,
@@ -607,6 +822,43 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     color: Colors.textMuted,
     fontStyle: 'italic',
+    lineHeight: 22,
+  },
+  practiceLineCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.accent,
+    position: 'relative',
+  },
+  practiceLineText: {
+    fontSize: FontSize.lg,
+    color: Colors.text,
+    lineHeight: 26,
+    paddingRight: 28,
+  },
+  editBtn: {
+    position: 'absolute',
+    top: Spacing.sm,
+    right: Spacing.sm,
+    padding: 4,
+  },
+  practiceTranscriptCard: {
+    gap: 4,
+  },
+  practiceTranscriptLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '600',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  practiceTranscriptText: {
+    fontSize: FontSize.md,
+    color: Colors.text,
     lineHeight: 22,
   },
   hintCard: {
@@ -821,6 +1073,25 @@ const styles = StyleSheet.create({
   coachBtnText: {
     fontSize: FontSize.xs,
     color: Colors.accent,
+    fontWeight: '600',
+  },
+  testFlipBtn: {
+    alignItems: 'center',
+    width: 60,
+  },
+  testFlipText: {
+    fontSize: FontSize.xs,
+    color: Colors.accent,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  practiceFlipBtn: {
+    width: 60,
+    alignItems: 'center',
+  },
+  practiceFlipText: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
     fontWeight: '600',
   },
   feedbackControls: {

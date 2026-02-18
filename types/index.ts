@@ -28,6 +28,7 @@ export interface Script {
   scenes: Scene[];
   createdAt: string;
   rawText?: string;
+  pdfUri?: string;
 }
 
 export interface LineProgress {
@@ -36,6 +37,8 @@ export interface LineProgress {
   correctAttempts: number;
   lastPracticed: string;
   mastered: boolean;
+  readyForTest?: boolean;
+  practiceDuration?: number;
 }
 
 export interface SceneProgress {

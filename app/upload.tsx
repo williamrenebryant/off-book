@@ -11,10 +11,11 @@ import {
   Alert,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { File as ExpoFile } from 'expo-file-system';
+import { File as ExpoFile, Directory, Paths } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
+import { extractPdfText } from '../modules/pdf-text-extractor/src';
 import { parseScript } from '@/lib/claude';
 import { saveScript, getSettings } from '@/lib/storage';
 import { Script } from '@/types';
@@ -45,29 +46,16 @@ export default function UploadScreen() {
 
     const asset = result.assets[0];
 
-    // PDFs are sent as base64 — reject files too large for the request
-    const MAX_PDF_BYTES = 8 * 1024 * 1024; // 8 MB
-    if (asset.mimeType !== 'text/plain' && asset.size && asset.size > MAX_PDF_BYTES) {
-      Alert.alert(
-        'PDF Too Large',
-        `This PDF is ${(asset.size / (1024 * 1024)).toFixed(1)} MB. Please use a PDF under 8 MB, or export your script as a .txt file instead.`
-      );
-      return;
-    }
-
     setFileName(asset.name);
     setFileUri(asset.uri);
     setMimeType(asset.mimeType ?? 'application/pdf');
 
-    // Read file as base64 for PDF, or as text for txt files
-    const file = new ExpoFile(asset.uri);
     if (asset.mimeType === 'text/plain') {
+      const file = new ExpoFile(asset.uri);
       const text = await file.text();
       setFileBase64(text);
-    } else {
-      const b64 = await file.base64();
-      setFileBase64(b64);
     }
+    // PDF: fileUri is used directly — no base64 needed
 
     // Auto-fill title from filename
     const guessedTitle = asset.name.replace(/\.(pdf|txt|rtf)$/i, '').replace(/[-_]/g, ' ');
@@ -94,13 +82,11 @@ export default function UploadScreen() {
 
       if (mimeType === 'text/plain') {
         scriptText = fileBase64;
-        setStatusText('Identifying characters and scenes...');
       } else {
-        // For PDF, we send it directly to Claude as a document
         setStatusText('Extracting text from PDF...');
-        scriptText = await extractPdfText(settings.anthropicApiKey, fileBase64, title);
-        setStatusText('Identifying characters and scenes...');
+        scriptText = await extractPdfText(fileUri);  // native, no API key
       }
+      setStatusText('Identifying characters and scenes...');
 
       const result = await parseScript(settings.anthropicApiKey, scriptText, title);
       setParsedScript(result);
@@ -109,12 +95,21 @@ export default function UploadScreen() {
       const msg: string = err.message ?? 'Something went wrong parsing the script.';
       const isOverloaded = msg.includes('529') || msg.includes('overloaded');
       const isFiltered = msg.includes('content filtering') || msg.includes('content_policy');
+      const isScannedPdf = msg.includes('image-based') || msg.includes('no extractable text');
       Alert.alert(
-        isOverloaded ? 'Claude is Busy' : isFiltered ? 'PDF Blocked by Content Filter' : 'Parse Error',
+        isOverloaded
+          ? 'Claude is Busy'
+          : isFiltered
+          ? 'PDF Blocked by Content Filter'
+          : isScannedPdf
+          ? 'Scanned PDF Detected'
+          : 'Parse Error',
         isOverloaded
           ? "Anthropic's servers are overloaded right now. Wait a moment and try again."
           : isFiltered
           ? "This PDF's content is being blocked by Anthropic's safety filter. Try exporting your script as a plain text (.txt) file — that works reliably."
+          : isScannedPdf
+          ? "This PDF appears to be image-based (scanned) and contains no extractable text. Export your script as a .txt file instead."
           : msg
       );
       setStep('title');
@@ -130,6 +125,15 @@ export default function UploadScreen() {
       selectedCharacter,
       createdAt: new Date().toISOString(),
     };
+
+    if (mimeType !== 'text/plain' && fileUri) {
+      const dir = new Directory(Paths.document, 'scripts');
+      dir.create({ intermediates: true, idempotent: true });
+      const dest = new ExpoFile(dir, `${script.id}.pdf`);
+      const src = new ExpoFile(fileUri);
+      src.copy(dest);
+      script.pdfUri = dest.uri;
+    }
 
     await saveScript(script);
     router.replace(`/script/${script.id}`);
@@ -192,7 +196,7 @@ export default function UploadScreen() {
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.accent} />
           <Text style={styles.parsingText}>{statusText}</Text>
-          <Text style={styles.parsingSubtext}>This takes about 15–30 seconds</Text>
+          <Text style={styles.parsingSubtext}>This usually takes a few seconds</Text>
         </View>
       )}
 
@@ -244,48 +248,6 @@ export default function UploadScreen() {
       )}
     </SafeAreaView>
   );
-}
-
-async function extractPdfText(apiKey: string, base64: string, title: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', 'https://api.anthropic.com/v1/messages');
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.setRequestHeader('x-api-key', apiKey);
-    xhr.setRequestHeader('anthropic-version', '2023-06-01');
-    xhr.timeout = 120000;
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        const data = JSON.parse(xhr.responseText);
-        resolve(data.content[0].text);
-      } else {
-        reject(new Error(`PDF extraction failed (${xhr.status}): ${xhr.responseText}`));
-      }
-    };
-    xhr.onerror = () => reject(new Error('Network request failed'));
-    xhr.ontimeout = () => reject(new Error('Request timed out — try a smaller PDF or use a .txt file'));
-    xhr.send(
-      JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 8192,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'document',
-                source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-              },
-              {
-                type: 'text',
-                text: 'Output the complete text of this document verbatim, preserving all line breaks, capitalisation, and formatting exactly as it appears. Do not summarise or skip anything.',
-              },
-            ],
-          },
-        ],
-      })
-    );
-  });
 }
 
 function countLines(
