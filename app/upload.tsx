@@ -263,7 +263,7 @@ async function extractPdfText(apiKey: string, base64: string, title: string): Pr
     xhr.ontimeout = () => reject(new Error('Request timed out — try a smaller PDF or use a .txt file'));
     xhr.send(
       JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         messages: [
           {
@@ -275,7 +275,16 @@ async function extractPdfText(apiKey: string, base64: string, title: string): Pr
               },
               {
                 type: 'text',
-                text: 'Please extract ALL the text from this script exactly as it appears, preserving line breaks, character names, stage directions, and formatting. Output only the raw text, nothing else.',
+                text: `This is a theatre or film script. Extract ALL the text exactly as it appears.
+
+CRITICAL — preserve these formatting details precisely:
+- Character names that appear before dialogue (e.g. "HAMLET", "JULIE:", "Tom:") — keep them on their own line, exactly as capitalised
+- Scene and act headings (e.g. "ACT ONE", "SCENE 2", "INT. KITCHEN - DAY") — keep on their own line
+- Stage directions in parentheses or brackets — keep them
+- Every line of dialogue — keep each speaker's text on its own line(s)
+- Blank lines between speeches — preserve them
+
+Do NOT summarise, paraphrase, or skip any content. Output only the raw extracted text, nothing else.`,
               },
             ],
           },

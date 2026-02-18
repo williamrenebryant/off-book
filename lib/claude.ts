@@ -3,33 +3,45 @@ import { Script, Scene, Line, FeedbackResult } from '@/types';
 const ANTHROPIC_BASE = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-6';
 
+function xhrPost(url: string, headers: Record<string, string>, body: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(xhr.responseText);
+      } else {
+        reject(new Error(`API error (${xhr.status}): ${xhr.responseText}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network request failed'));
+    xhr.send(body);
+  });
+}
+
 async function callClaude(
   apiKey: string,
   messages: object[],
   systemPrompt: string,
   maxTokens = 4096
 ): Promise<string> {
-  const response = await fetch(ANTHROPIC_BASE, {
-    method: 'POST',
-    headers: {
+  const raw = await xhrPost(
+    ANTHROPIC_BASE,
+    {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({
+    JSON.stringify({
       model: MODEL,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages,
-    }),
-  });
+    })
+  );
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Claude API error (${response.status}): ${err}`);
-  }
-
-  const data = await response.json();
+  const data = JSON.parse(raw);
   return data.content[0].text;
 }
 
@@ -40,16 +52,26 @@ export async function parseScript(
   scriptText: string,
   title: string
 ): Promise<Omit<Script, 'id' | 'createdAt' | 'selectedCharacter'>> {
-  const system = `You are a script analysis expert for theatre and musical theatre.
-Your job is to parse a script and extract its structure precisely.
+  const system = `You are a script analysis expert for theatre, musical theatre, and film/TV.
+Your job is to parse a script and extract its structure, even if the formatting is messy or inconsistent.
 
-IMPORTANT RULES:
-- In scripts, character names before their lines are usually in ALL CAPS or bold (e.g., "HAMLET:", "JULIE:")
-- Sung lines in musical theatre are often in ALL CAPS or marked differently from spoken lines
-- Stage directions are usually in parentheses or italics
-- Identify scene breaks by looking for "SCENE", "ACT", "Scene", location headings, or clear breaks in the action
-- Extract ONLY actual spoken/sung dialogue lines — not stage directions
-- Preserve the EXACT text of each line, including punctuation
+FINDING CHARACTERS — look for ALL of these patterns:
+- Names in ALL CAPS before dialogue: "HAMLET:", "JULIE", "TOM:"
+- Names in Title Case before dialogue: "Hamlet:", "Julie."
+- Names followed by a period, colon, or new line before their speech
+- Repeated names that clearly introduce dialogue — if a word appears repeatedly before lines of text, it is almost certainly a character name
+- When in doubt, include it as a character rather than miss one
+
+FINDING SCENES — look for ALL of these patterns:
+- "ACT", "SCENE", "Scene", "Act" headings
+- Location headings: "INT.", "EXT.", place names in caps
+- Clear topic/location shifts even without explicit headings
+- If no scene breaks exist, use act breaks; if none, put everything in one scene
+
+EXTRACTING LINES:
+- Extract ONLY spoken/sung dialogue — not stage directions or descriptions
+- Preserve the EXACT text of each line
+- Sung lines are often in ALL CAPS or marked as songs
 
 Return ONLY valid JSON, no markdown, no explanation.`;
 
