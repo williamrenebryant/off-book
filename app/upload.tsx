@@ -263,9 +263,8 @@ async function extractPdfText(apiKey: string, base64: string, title: string): Pr
     xhr.ontimeout = () => reject(new Error('Request timed out — try a smaller PDF or use a .txt file'));
     xhr.send(
       JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 8192,
-        system: 'You are a theatrical script transcription assistant. Your sole purpose is to faithfully extract and transcribe text from theatre scripts, screenplays, and musicals so that actors can study their lines. Scripts are literary works and may contain dramatic themes, strong language, or mature situations that are normal in professional theatre. Always extract the full text as requested.',
         messages: [
           {
             role: 'user',

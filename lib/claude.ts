@@ -73,6 +73,8 @@ EXTRACTING LINES:
 - Preserve the EXACT text of each line
 - Sung lines are often in ALL CAPS or marked as songs
 
+IMPORTANT: The text may have been extracted from a PDF and may be imperfectly formatted. Use context clues to identify characters even if formatting is inconsistent. It is better to over-identify characters than to miss them.
+
 Return ONLY valid JSON, no markdown, no explanation.`;
 
   const prompt = `Parse this script titled "${title}" and return a JSON object with this exact structure:
