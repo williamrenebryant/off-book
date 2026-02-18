@@ -6,11 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
-import { getScript, getProgress } from '@/lib/storage';
+import { getScript, getProgress, saveScript } from '@/lib/storage';
 import { Script, ScriptProgress, Scene } from '@/types';
 import Card from '@/components/ui/Card';
 import ProgressBar from '@/components/ui/ProgressBar';
@@ -32,6 +33,22 @@ export default function ScriptOverviewScreen() {
   );
 
   if (!script) return null;
+
+  const handleRename = () => {
+    if (!script) return;
+    Alert.prompt(
+      'Rename Script',
+      '',
+      (newTitle) => {
+        if (!newTitle?.trim() || newTitle.trim() === script.title) return;
+        const updated = { ...script, title: newTitle.trim() };
+        setScript(updated);
+        saveScript(updated);
+      },
+      'plain-text',
+      script.title,
+    );
+  };
 
   const getSceneProgress = (scene: Scene): number => {
     if (!progress) return 0;
@@ -97,9 +114,14 @@ export default function ScriptOverviewScreen() {
           <Ionicons name="chevron-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <View style={styles.headerText}>
-          <Text style={styles.scriptTitle} numberOfLines={1}>
-            {script.title}
-          </Text>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.scriptTitle} numberOfLines={1}>
+              {script.title}
+            </Text>
+            <TouchableOpacity onPress={handleRename}>
+              <Ionicons name="pencil-outline" size={16} color={Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.characterName}>{script.selectedCharacter}</Text>
         </View>
       </View>
@@ -132,6 +154,14 @@ export default function ScriptOverviewScreen() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       />
+
+      <TouchableOpacity
+        style={styles.addScenesBtn}
+        onPress={() => router.push(`/upload?appendToScriptId=${script!.id}`)}
+      >
+        <Ionicons name="add-circle-outline" size={18} color={Colors.accent} />
+        <Text style={styles.addScenesBtnText}>Add more scenes</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -259,5 +289,24 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     marginTop: 2,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  addScenesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: Spacing.md,
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  addScenesBtnText: {
+    fontSize: FontSize.sm,
+    color: Colors.accent,
+    fontWeight: '600',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,20 +12,22 @@ import {
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { File as ExpoFile, Directory, Paths } from 'expo-file-system';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
 import { extractPdfText } from '../modules/pdf-text-extractor/src';
 import { parseScript } from '@/lib/claude';
-import { saveScript, getSettings } from '@/lib/storage';
+import { saveScript, getScript, getSettings } from '@/lib/storage';
 import { Script } from '@/types';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 
-type Step = 'pick' | 'title' | 'parsing' | 'character';
+type Step = 'pick' | 'title' | 'parsing' | 'character' | 'merge_confirm';
 
 export default function UploadScreen() {
   const router = useRouter();
+  const { appendToScriptId } = useLocalSearchParams<{ appendToScriptId?: string }>();
+  const [existingScript, setExistingScript] = useState<Script | null>(null);
   const [step, setStep] = useState<Step>('pick');
   const [fileName, setFileName] = useState('');
   const [title, setTitle] = useState('');
@@ -35,6 +37,10 @@ export default function UploadScreen() {
   const [parsedScript, setParsedScript] = useState<Omit<Script, 'id' | 'createdAt' | 'selectedCharacter'> | null>(null);
   const [selectedCharacter, setSelectedCharacter] = useState('');
   const [statusText, setStatusText] = useState('');
+
+  useEffect(() => {
+    if (appendToScriptId) getScript(appendToScriptId).then(setExistingScript);
+  }, [appendToScriptId]);
 
   const handlePickFile = async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -60,7 +66,12 @@ export default function UploadScreen() {
     // Auto-fill title from filename
     const guessedTitle = asset.name.replace(/\.(pdf|txt|rtf)$/i, '').replace(/[-_]/g, ' ');
     setTitle(guessedTitle);
-    setStep('title');
+
+    if (appendToScriptId) {
+      setStep('parsing');  // will auto-trigger via useEffect
+    } else {
+      setStep('title');
+    }
   };
 
   const handleParseScript = async () => {
@@ -90,7 +101,11 @@ export default function UploadScreen() {
 
       const result = await parseScript(settings.anthropicApiKey, scriptText, title);
       setParsedScript(result);
-      setStep('character');
+      if (appendToScriptId) {
+        setStep('merge_confirm');
+      } else {
+        setStep('character');
+      }
     } catch (err: any) {
       const msg: string = err.message ?? 'Something went wrong parsing the script.';
       const isOverloaded = msg.includes('529') || msg.includes('overloaded');
@@ -112,9 +127,16 @@ export default function UploadScreen() {
           ? "This PDF appears to be image-based (scanned) and contains no extractable text. Export your script as a .txt file instead."
           : msg
       );
-      setStep('title');
+      setStep(appendToScriptId ? 'pick' : 'title');
     }
   };
+
+  // Auto-trigger parse when entering 'parsing' step in append mode
+  useEffect(() => {
+    if (step === 'parsing' && appendToScriptId && (fileUri || fileBase64)) {
+      handleParseScript();
+    }
+  }, [step, appendToScriptId]);
 
   const handleSaveScript = async () => {
     if (!parsedScript || !selectedCharacter) return;
@@ -137,6 +159,38 @@ export default function UploadScreen() {
 
     await saveScript(script);
     router.replace(`/script/${script.id}`);
+  };
+
+  const handleMergeScenes = async () => {
+    if (!parsedScript || !existingScript) return;
+
+    const ts = Date.now();
+    const newScenes = parsedScript.scenes.map((sc, si) => ({
+      ...sc,
+      id: `${ts}_s${si}`,
+      lines: sc.lines.map((l, li) => ({
+        ...l,
+        id: `${ts}_l${si}_${li}`,
+      })),
+    }));
+
+    const allChars = Array.from(new Set([...existingScript.characters, ...parsedScript.characters]));
+
+    const updatedScript: Script = {
+      ...existingScript,
+      characters: allChars,
+      scenes: [...existingScript.scenes, ...newScenes],
+    };
+
+    if (mimeType !== 'text/plain' && fileUri) {
+      const dir = new Directory(Paths.document, 'scripts');
+      dir.create({ intermediates: true, idempotent: true });
+      const dest = new ExpoFile(dir, `${existingScript.id}_${ts}.pdf`);
+      new ExpoFile(fileUri).copy(dest);
+    }
+
+    await saveScript(updatedScript);
+    router.replace(`/script/${existingScript.id}`);
   };
 
   return (
@@ -242,6 +296,36 @@ export default function UploadScreen() {
             label="Start Memorizing"
             onPress={handleSaveScript}
             disabled={!selectedCharacter}
+            style={styles.actionBtn}
+          />
+        </View>
+      )}
+
+      {step === 'merge_confirm' && parsedScript && existingScript && (
+        <View style={styles.form}>
+          <Text style={styles.stepTitle}>Adding to "{existingScript.title}"</Text>
+          <Text style={styles.stepSub}>
+            {existingScript.selectedCharacter} · {parsedScript.scenes.length} new{' '}
+            {parsedScript.scenes.length === 1 ? 'scene' : 'scenes'} found
+          </Text>
+
+          <ScrollView style={styles.charList} showsVerticalScrollIndicator={false}>
+            {parsedScript.scenes.map((sc) => {
+              const myLines = sc.lines.filter(l => l.character === existingScript.selectedCharacter);
+              return (
+                <View key={sc.id} style={[styles.charOption, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                  <Text style={styles.charName}>{sc.title}</Text>
+                  <Text style={styles.charLineCount}>
+                    {myLines.length} line{myLines.length !== 1 ? 's' : ''} for your character
+                  </Text>
+                </View>
+              );
+            })}
+          </ScrollView>
+
+          <Button
+            label={`Add ${parsedScript.scenes.length} ${parsedScript.scenes.length === 1 ? 'Scene' : 'Scenes'}`}
+            onPress={handleMergeScenes}
             style={styles.actionBtn}
           />
         </View>
