@@ -106,7 +106,14 @@ export default function UploadScreen() {
       setParsedScript(result);
       setStep('character');
     } catch (err: any) {
-      Alert.alert('Parse Error', err.message ?? 'Something went wrong parsing the script.');
+      const msg: string = err.message ?? 'Something went wrong parsing the script.';
+      const isOverloaded = msg.includes('529') || msg.includes('overloaded');
+      Alert.alert(
+        isOverloaded ? 'Claude is Busy' : 'Parse Error',
+        isOverloaded
+          ? 'Anthropic\'s servers are overloaded right now. Wait a moment and try again.'
+          : msg
+      );
       setStep('title');
     }
   };
