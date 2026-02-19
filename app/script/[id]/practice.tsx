@@ -54,6 +54,8 @@ interface SceneModeConfig {
   type: 'flow' | 'drill';
   threshold: number; // 70, 80, or 90
   lineCount: number | null; // null = all
+  startLineId?: string; // line to start from
+  endLineId?: string; // line to end at
 }
 
 interface SceneModeResult {
@@ -99,8 +101,11 @@ export default function PracticeScreen() {
   const [configType, setConfigType] = useState<'flow' | 'drill'>('flow');
   const [configThreshold, setConfigThreshold] = useState(80);
   const [configLineCount, setConfigLineCount] = useState<number | null>(null);
+  const [configStartLineId, setConfigStartLineId] = useState<string | null>(null);
+  const [configEndLineId, setConfigEndLineId] = useState<string | null>(null);
   const [autoAdvancing, setAutoAdvancing] = useState(false);
   const [cueMode, setCueMode] = useState<'text' | 'audio'>('text');
+  const [showLineNavigator, setShowLineNavigator] = useState(false);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -264,7 +269,25 @@ export default function PracticeScreen() {
         if (!foundScene) return;
         setScene(foundScene);
 
-        const lines = foundScene.lines.filter((l) => l.character === s.selectedCharacter);
+        // Filter lines for the selected character and recalculate cues
+        const lines = foundScene.lines
+          .filter((l) => l.character === s.selectedCharacter)
+          .map((line) => {
+            // Rebuild cues based on the full scene context
+            const currentIdx = foundScene.lines.findIndex((l) => l.id === line.id);
+            const cues = [];
+
+            if (currentIdx > 0) {
+              const prev = foundScene.lines[currentIdx - 1];
+              cues.push({ character: prev.character, text: prev.text });
+            }
+            if (currentIdx > 1) {
+              const prevPrev = foundScene.lines[currentIdx - 2];
+              cues.unshift({ character: prevPrev.character, text: prevPrev.text });
+            }
+
+            return { ...line, cues };
+          });
         setMyLines(lines);
         myLinesRef.current = lines;
         allMyLinesRef.current = lines;
@@ -408,6 +431,64 @@ export default function PracticeScreen() {
     }
   };
 
+  const handleChangeCharacter = () => {
+    if (!script) return;
+
+    const options = script.characters
+      .filter((char) => char !== script.selectedCharacter)
+      .map((char) => ({
+        text: char,
+        onPress: () => {
+          // Update script with new selected character
+          const updated = { ...script, selectedCharacter: char };
+          setScript(updated);
+          saveScript(updated);
+
+          // Re-filter lines for new character and recalculate cues
+          const foundScene = updated.scenes.find((sc) => sc.id === sceneId);
+          if (foundScene) {
+            const newLines = foundScene.lines
+              .filter((l) => l.character === char)
+              .map((line) => {
+                // Rebuild cues for this character's context
+                const allSceneLines = foundScene.lines;
+                const currentIdx = allSceneLines.findIndex((l) => l.id === line.id);
+                const cues = [];
+
+                if (currentIdx > 0) {
+                  const prev = allSceneLines[currentIdx - 1];
+                  cues.push({ character: prev.character, text: prev.text });
+                }
+                if (currentIdx > 1) {
+                  const prevPrev = allSceneLines[currentIdx - 2];
+                  cues.unshift({ character: prevPrev.character, text: prevPrev.text });
+                }
+
+                return { ...line, cues };
+              });
+
+            setMyLines(newLines);
+            myLinesRef.current = newLines;
+            allMyLinesRef.current = newLines;
+            setCurrentIndex(0);
+            currentIndexRef.current = 0;
+            setFeedback(null);
+            setTranscript('');
+            setHintText('');
+            setHintLevel(0);
+            setShowLine(false);
+            setCoachingQuestion('');
+            setPracticeStateAndRef('practice_idle');
+          }
+        },
+      }));
+
+    Alert.alert('Switch Character', 'Choose a character to practice:', [
+      ...options,
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const handleEvaluate = async (spokenText: string) => {
     if (!currentLineRef.current) return;
     stopPulse();
@@ -499,15 +580,27 @@ export default function PracticeScreen() {
       type: configType,
       threshold: configThreshold,
       lineCount: configLineCount,
+      startLineId: configStartLineId || undefined,
+      endLineId: configEndLineId || undefined,
     };
     setSceneConfig(cfg);
     sceneConfigRef.current = cfg;
     setSceneModeResults([]);
     setShowSceneConfig(false);
 
-    // Slice lines if lineCount is set
+    // Filter lines based on line count and line range
     const allLines = allMyLinesRef.current;
-    const activeLines = configLineCount ? allLines.slice(0, configLineCount) : allLines;
+    let activeLines = configLineCount ? allLines.slice(0, configLineCount) : allLines;
+
+    // Apply line range if set
+    if (configStartLineId || configEndLineId) {
+      const startIdx = configStartLineId ? activeLines.findIndex(l => l.id === configStartLineId) : 0;
+      const endIdx = configEndLineId ? activeLines.findIndex(l => l.id === configEndLineId) : activeLines.length - 1;
+      const validStartIdx = startIdx >= 0 ? startIdx : 0;
+      const validEndIdx = endIdx >= 0 ? endIdx : activeLines.length - 1;
+      activeLines = activeLines.slice(validStartIdx, validEndIdx + 1);
+    }
+
     setMyLines(activeLines);
     myLinesRef.current = activeLines;
 
@@ -531,7 +624,17 @@ export default function PracticeScreen() {
     if (!sceneConfig) return;
     setSceneModeResults([]);
     const allLines = allMyLinesRef.current;
-    const activeLines = sceneConfig.lineCount ? allLines.slice(0, sceneConfig.lineCount) : allLines;
+    let activeLines = sceneConfig.lineCount ? allLines.slice(0, sceneConfig.lineCount) : allLines;
+
+    // Apply line range if set
+    if (sceneConfig.startLineId || sceneConfig.endLineId) {
+      const startIdx = sceneConfig.startLineId ? activeLines.findIndex(l => l.id === sceneConfig.startLineId) : 0;
+      const endIdx = sceneConfig.endLineId ? activeLines.findIndex(l => l.id === sceneConfig.endLineId) : activeLines.length - 1;
+      const validStartIdx = startIdx >= 0 ? startIdx : 0;
+      const validEndIdx = endIdx >= 0 ? endIdx : activeLines.length - 1;
+      activeLines = activeLines.slice(validStartIdx, validEndIdx + 1);
+    }
+
     setMyLines(activeLines);
     myLinesRef.current = activeLines;
     const testModes: Record<string, 'practice' | 'test'> = {};
@@ -711,6 +814,22 @@ export default function PracticeScreen() {
 
   const handleViewPdf = () => {
     if (script?.pdfUri) Linking.openURL(script.pdfUri);
+  };
+
+  const jumpToLine = (lineId: string) => {
+    const idx = myLines.findIndex(l => l.id === lineId);
+    if (idx >= 0) {
+      setCurrentIndex(idx);
+      currentIndexRef.current = idx;
+      setFeedback(null);
+      setTranscript('');
+      setHintText('');
+      setHintLevel(0);
+      setShowLine(false);
+      setCoachingQuestion('');
+      setPracticeStateAndRef('cue');
+      setShowLineNavigator(false);
+    }
   };
 
   const renderCues = () => {
@@ -955,9 +1074,108 @@ export default function PracticeScreen() {
               ))}
             </View>
 
+            <Text style={styles.configSectionLabel}>Practice range</Text>
+            <View style={styles.lineRangeContainer}>
+              <Text style={styles.lineRangeLabel}>Start</Text>
+              <TouchableOpacity
+                style={styles.lineSelector}
+                onPress={() => {
+                  const idx = configStartLineId
+                    ? allMyLinesRef.current.findIndex(l => l.id === configStartLineId)
+                    : -1;
+                  Alert.alert(
+                    'Start line',
+                    'Which line should you start from?',
+                    allMyLinesRef.current.map((line, i) => ({
+                      text: `${i + 1}. ${line.text.substring(0, 30)}${line.text.length > 30 ? '...' : ''}`,
+                      onPress: () => setConfigStartLineId(line.id),
+                    }))
+                  );
+                }}
+              >
+                <Text style={styles.lineSelectorText}>
+                  {configStartLineId
+                    ? `Line ${allMyLinesRef.current.findIndex(l => l.id === configStartLineId) + 1}`
+                    : 'Start from beginning'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.lineRangeContainer}>
+              <Text style={styles.lineRangeLabel}>End</Text>
+              <TouchableOpacity
+                style={styles.lineSelector}
+                onPress={() => {
+                  Alert.alert(
+                    'End line',
+                    'Which line should you end at?',
+                    allMyLinesRef.current.map((line, i) => ({
+                      text: `${i + 1}. ${line.text.substring(0, 30)}${line.text.length > 30 ? '...' : ''}`,
+                      onPress: () => setConfigEndLineId(line.id),
+                    }))
+                  );
+                }}
+              >
+                <Text style={styles.lineSelectorText}>
+                  {configEndLineId
+                    ? `Line ${allMyLinesRef.current.findIndex(l => l.id === configEndLineId) + 1}`
+                    : 'End at last line'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <Text style={styles.configNote}>
               {allMyLinesRef.current.length} lines in this scene for {script?.selectedCharacter}
             </Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Line Navigator Modal */}
+      <Modal
+        visible={showLineNavigator}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowLineNavigator(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowLineNavigator(false)}>
+              <Text style={styles.modalCancel}>Close</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Lines</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.lineNavContent}>
+            {myLines.map((line, idx) => (
+              <TouchableOpacity
+                key={line.id}
+                style={[
+                  styles.lineNavItem,
+                  idx === currentIndex && styles.lineNavItemActive,
+                ]}
+                onPress={() => jumpToLine(line.id)}
+              >
+                <View style={styles.lineNavNumber}>
+                  <Text style={[
+                    styles.lineNavNumberText,
+                    idx === currentIndex && styles.lineNavNumberTextActive,
+                  ]}>
+                    {idx + 1}
+                  </Text>
+                </View>
+                <Text style={[
+                  styles.lineNavText,
+                  idx === currentIndex && styles.lineNavTextActive,
+                ]}>
+                  {line.text}
+                </Text>
+                {idx === currentIndex && (
+                  <Ionicons name="checkmark-circle" size={20} color={Colors.accent} />
+                )}
+              </TouchableOpacity>
+            ))}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -968,10 +1186,10 @@ export default function PracticeScreen() {
           <Ionicons name="chevron-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <View style={styles.headerTitleRow}>
-            <Text style={styles.headerScene} numberOfLines={1}>
-              {scene.title}
-            </Text>
+          <Text style={styles.headerScene} numberOfLines={1}>
+            {scene.title}
+          </Text>
+          <View style={styles.headerSubRow}>
             {sceneConfig && (
               <View style={styles.sceneBadge}>
                 <Text style={styles.sceneBadgeText}>
@@ -979,26 +1197,34 @@ export default function PracticeScreen() {
                 </Text>
               </View>
             )}
-            {script.pdfUri ? (
-              <TouchableOpacity onPress={handleViewPdf} style={styles.pdfLink}>
-                <Text style={styles.pdfLinkText}>PDF</Text>
-              </TouchableOpacity>
-            ) : null}
+            <Text style={styles.headerProgress}>
+              {currentIndex + 1} / {myLines.length}
+            </Text>
           </View>
-          <Text style={styles.headerProgress}>
-            {currentIndex + 1} of {myLines.length}
-          </Text>
         </View>
-        <TouchableOpacity
-          onPress={() => setShowSceneConfig(true)}
-          style={styles.sceneBtn}
-        >
-          <Ionicons
-            name="film-outline"
-            size={22}
-            color={sceneConfig ? Colors.accent : Colors.textMuted}
-          />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {script.pdfUri ? (
+            <TouchableOpacity onPress={handleViewPdf} style={styles.headerIconBtn}>
+              <Ionicons name="document-outline" size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            onPress={() => setShowLineNavigator(true)}
+            style={styles.headerIconBtn}
+          >
+            <Ionicons name="list-outline" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowSceneConfig(true)}
+            style={styles.headerIconBtn}
+          >
+            <Ionicons
+              name="film-outline"
+              size={18}
+              color={sceneConfig ? Colors.accent : Colors.textMuted}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ProgressBar progress={progressPercent} style={styles.topProgress} />
@@ -1013,7 +1239,12 @@ export default function PracticeScreen() {
 
         {/* Your line section */}
         <View style={styles.yourTurn}>
-          <Text style={styles.yourTurnLabel}>{script.selectedCharacter}</Text>
+          <TouchableOpacity onPress={handleChangeCharacter} style={styles.characterLabelRow}>
+            <Text style={styles.yourTurnLabel}>{script.selectedCharacter}</Text>
+            {script.characters.length > 1 && (
+              <Ionicons name="chevron-down" size={14} color={Colors.accent} style={styles.characterLabelChevron} />
+            )}
+          </TouchableOpacity>
 
           {/* PRACTICE MODE: idle */}
           {practiceState === 'practice_idle' && (
@@ -1309,17 +1540,17 @@ const styles = StyleSheet.create({
   },
   headerCenter: {
     flex: 1,
-    alignItems: 'center',
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
   },
   headerScene: {
     fontSize: FontSize.md,
     fontWeight: '600',
     color: Colors.text,
+  },
+  headerSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: 2,
   },
   sceneBadge: {
     backgroundColor: Colors.accent,
@@ -1332,27 +1563,18 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: '700',
   },
-  pdfLink: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  pdfLinkText: {
-    fontSize: FontSize.xs,
-    color: Colors.accent,
-    fontWeight: '600',
-  },
   headerProgress: {
     fontSize: FontSize.xs,
     color: Colors.textMuted,
-    marginTop: 1,
   },
-  sceneBtn: {
-    width: 40,
-    height: 40,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1420,6 +1642,15 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  characterLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  characterLabelChevron: {
+    marginTop: 1,
   },
   yourTurnPrompt: {
     fontSize: FontSize.md,
@@ -1869,6 +2100,72 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     marginTop: Spacing.sm,
+  },
+  lineRangeContainer: {
+    gap: Spacing.sm,
+  },
+  lineRangeLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '600',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  lineSelector: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  lineSelectorText: {
+    fontSize: FontSize.sm,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  lineNavContent: {
+    padding: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  lineNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  lineNavItemActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  lineNavNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lineNavNumberText: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  lineNavNumberTextActive: {
+    color: Colors.accent,
+  },
+  lineNavText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  lineNavTextActive: {
+    color: Colors.white,
   },
   // Scene mode review screen
   reviewScroll: {

@@ -326,6 +326,11 @@ export default function RecordScreen() {
         cues: [], // Will be populated with cue lines if available
       }));
 
+      // Extract all unique characters from the recorded lines
+      const recordedCharacters = Array.from(
+        new Set(lines.map((l) => l.character))
+      );
+
       // Create Scene object
       const newScene: Scene = {
         id: `scene_${Date.now()}`,
@@ -339,8 +344,14 @@ export default function RecordScreen() {
         const existingScript = existingScripts.find((s) => s.id === selectedScriptId);
         if (!existingScript) throw new Error('Script not found');
 
+        // Merge existing characters with new characters from this scene
+        const mergedCharacters = Array.from(
+          new Set([...existingScript.characters, ...recordedCharacters])
+        );
+
         const updatedScript: Script = {
           ...existingScript,
+          characters: mergedCharacters,
           scenes: [
             ...existingScript.scenes,
             {
@@ -356,7 +367,7 @@ export default function RecordScreen() {
         const newScript: Script = {
           id: `script_${Date.now()}`,
           title: scriptTitle.trim(),
-          characters: [selectedCharacter],
+          characters: recordedCharacters,
           selectedCharacter,
           scenes: [newScene],
           createdAt: new Date().toISOString(),

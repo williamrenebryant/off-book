@@ -50,6 +50,26 @@ export default function ScriptOverviewScreen() {
     );
   };
 
+  const handleChangeCharacter = () => {
+    if (!script) return;
+
+    const options = script.characters.map((char) => ({
+      text: char,
+      onPress: () => {
+        if (char !== script.selectedCharacter) {
+          const updated = { ...script, selectedCharacter: char };
+          setScript(updated);
+          saveScript(updated);
+        }
+      },
+    }));
+
+    Alert.alert('Choose Character', 'Which character are you practicing?', [
+      ...options,
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const getSceneProgress = (scene: Scene): number => {
     if (!progress) return 0;
     const sp = progress.sceneProgress[scene.id];
@@ -122,7 +142,12 @@ export default function ScriptOverviewScreen() {
               <Ionicons name="pencil-outline" size={16} color={Colors.textMuted} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.characterName}>{script.selectedCharacter}</Text>
+          <TouchableOpacity onPress={handleChangeCharacter} style={styles.characterRow}>
+            <Text style={styles.characterName}>{script.selectedCharacter}</Text>
+            {script.characters.length > 1 && (
+              <Ionicons name="chevron-down" size={14} color={Colors.accent} style={styles.characterChevron} />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -201,10 +226,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.text,
   },
+  characterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   characterName: {
     fontSize: FontSize.sm,
     color: Colors.accent,
     fontWeight: '600',
+  },
+  characterChevron: {
+    marginTop: 1,
   },
   statsRow: {
     flexDirection: 'row',
