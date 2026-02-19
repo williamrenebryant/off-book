@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this app is
 
-Off Book is an iOS/Android app for actors to memorize lines. It parses scripts (PDF/TXT), identifies character lines, and runs a speech-based practice loop: show cue line → actor speaks → Claude evaluates accuracy → provide feedback/hints.
+Cue Line is an iOS/Android app for actors to memorize lines. It parses scripts (PDF/TXT), identifies character lines, and runs a speech-based practice loop: show cue line → actor speaks → Claude evaluates accuracy → provide feedback/hints.
 
 ## Commands
 

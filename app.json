@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Off Book",
+    "name": "Cue Line",
     "slug": "off-book",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "offbook",
+    "scheme": "cueline",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.offbook.app",
+      "bundleIdentifier": "com.cueline.app",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Off Book uses your microphone so you can practice your lines out loud.",
-        "NSSpeechRecognitionUsageDescription": "Off Book listens to your lines and gives you feedback on accuracy.",
+        "NSMicrophoneUsageDescription": "Cue Line uses your microphone so you can practice your lines out loud.",
+        "NSSpeechRecognitionUsageDescription": "Cue Line listens to your lines and gives you feedback on accuracy.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -29,7 +29,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.offbook.app",
+      "package": "com.cueline.app",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]

@@ -1,4 +1,4 @@
-# Off Book
+# Cue Line
 
 An iOS/Android app for actors to memorize lines. Upload a script, pick your character, and practice your lines hands-free using speech recognition — Claude listens, evaluates your delivery, and gives feedback.
 

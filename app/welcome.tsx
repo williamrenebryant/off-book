@@ -29,7 +29,7 @@ export default function WelcomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Off Book</Text>
+        <Text style={styles.title}>Cue Line</Text>
         <Text style={styles.subtitle}>
           AI-powered practice for actors
         </Text>
@@ -37,7 +37,7 @@ export default function WelcomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Welcome</Text>
           <Text style={styles.sectionText}>
-            Off Book helps you memorize and practice script lines using speech recognition and AI feedback. Your practice data stays on your device—no cloud backups.
+            Cue Line helps you memorize and practice script lines using speech recognition and AI feedback. Your practice data stays on your device—no cloud backups.
           </Text>
         </View>
 
@@ -47,14 +47,14 @@ export default function WelcomeScreen() {
           <Card style={styles.tcCard}>
             <Text style={styles.tcSubtitle}>Your Responsibility</Text>
             <Text style={styles.tcBody}>
-              You are responsible for ensuring you have the right to use any scripts or materials you upload or record in Off Book. The creators of Off Book are not responsible for copyright infringement or any unauthorized use of intellectual property.
+              You are responsible for ensuring you have the right to use any scripts or materials you upload or record in Cue Line. The creators of Cue Line are not responsible for copyright infringement or any unauthorized use of intellectual property.
             </Text>
           </Card>
 
           <Card style={styles.tcCard}>
             <Text style={styles.tcSubtitle}>No Warranty</Text>
             <Text style={styles.tcBody}>
-              Off Book is provided as-is without warranty. Speech recognition accuracy may vary. The app creators are not liable for any issues arising from its use, including failed practice sessions or inaccurate feedback.
+              Cue Line is provided as-is without warranty. Speech recognition accuracy may vary. The app creators are not liable for any issues arising from its use, including failed practice sessions or inaccurate feedback.
             </Text>
           </Card>
 
@@ -68,7 +68,7 @@ export default function WelcomeScreen() {
           <Card style={styles.tcCard}>
             <Text style={styles.tcSubtitle}>Third-Party Services</Text>
             <Text style={styles.tcBody}>
-              Off Book uses Anthropic's Claude AI for script parsing and line evaluation. When you use these features, your script text and practice attempts are sent to Anthropic's servers. Review Anthropic's privacy policy at anthropic.com.
+              Cue Line uses Anthropic's Claude AI for script parsing and line evaluation. When you use these features, your script text and practice attempts are sent to Anthropic's servers. Review Anthropic's privacy policy at anthropic.com.
             </Text>
           </Card>
         </View>
@@ -76,7 +76,7 @@ export default function WelcomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Privacy</Text>
           <Text style={styles.sectionText}>
-            Off Book does not collect personal information beyond what is necessary to provide its features. If you opt into in-app purchases or subscription, payment information is handled by Apple (iOS) or Google (Android), not by Off Book directly.
+            Cue Line does not collect personal information beyond what is necessary to provide its features. If you opt into in-app purchases or subscription, payment information is handled by Apple (iOS) or Google (Android), not by Cue Line directly.
           </Text>
         </View>
 

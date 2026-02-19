@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 
 const FREE_AUDIO_LIMIT_BYTES = 500 * 1024 * 1024; // 500 MB
-const AUDIO_DIR = FileSystem.documentDirectory + 'offbook_audio/';
+const AUDIO_DIR = FileSystem.documentDirectory + 'cueline_audio/';
 
 /**
  * Generates a unique ID using timestamp + random number.

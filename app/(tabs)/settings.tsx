@@ -240,7 +240,7 @@ export default function SettingsScreen() {
               {'\n'}You are responsible for the scripts you upload. Review full terms when you agreed to use this app.
             </Text>
             <Text style={styles.copyrightNotice}>
-              © Off Book. Scripts uploaded remain your responsibility. For legal inquiries, contact the app developer.
+              © Cue Line. Scripts uploaded remain your responsibility. For legal inquiries, contact the app developer.
             </Text>
           </View>
           <TouchableOpacity
@@ -248,7 +248,7 @@ export default function SettingsScreen() {
             onPress={() => {
               Alert.alert(
                 'View Terms & Conditions',
-                'To review the full Terms & Conditions, you can reinstall the app or contact support. The T&C were presented when you first opened Off Book.',
+                'To review the full Terms & Conditions, you can reinstall the app or contact support. The T&C were presented when you first opened Cue Line.',
                 [{ text: 'OK', style: 'default' }]
               );
             }}
@@ -258,7 +258,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </Card>
 
-        <Text style={styles.version}>Off Book · v1.0.0</Text>
+        <Text style={styles.version}>Cue Line · v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );

@@ -23,21 +23,21 @@ export function getTierForLength(charCount: number): TierInfo {
   if (charCount < 20_000) {
     return {
       tier: 'short',
-      productId: 'com.offbook.app.script.short',
+      productId: 'com.cueline.app.script.short',
       price: '$0.99',
       label: 'Short script',
     };
   } else if (charCount < 60_000) {
     return {
       tier: 'medium',
-      productId: 'com.offbook.app.script.medium',
+      productId: 'com.cueline.app.script.medium',
       price: '$1.99',
       label: 'Medium script',
     };
   } else {
     return {
       tier: 'long',
-      productId: 'com.offbook.app.script.long',
+      productId: 'com.cueline.app.script.long',
       price: '$2.99',
       label: 'Long script',
     };

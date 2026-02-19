@@ -28,7 +28,7 @@ export default function HomeScreen() {
   const handleDelete = (script: Script) => {
     Alert.alert(
       'Remove Script',
-      `Remove "${script.title}" from Off Book?`,
+      `Remove "${script.title}" from Cue Line?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -75,7 +75,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Off Book</Text>
+        <Text style={styles.title}>Cue Line</Text>
         <Text style={styles.subtitle}>Your scripts</Text>
       </View>
 

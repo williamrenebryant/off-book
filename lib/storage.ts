@@ -2,9 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Script, ScriptProgress, AppSettings } from '@/types';
 
 const KEYS = {
-  SCRIPTS: 'offbook_scripts',
-  PROGRESS: (scriptId: string) => `offbook_progress_${scriptId}`,
-  SETTINGS: 'offbook_settings',
+  SCRIPTS: 'cueline_scripts',
+  PROGRESS: (scriptId: string) => `cueline_progress_${scriptId}`,
+  SETTINGS: 'cueline_settings',
 };
 
 // --- Scripts ---
