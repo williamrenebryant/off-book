@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 
 const FREE_AUDIO_LIMIT_BYTES = 500 * 1024 * 1024; // 500 MB
