@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
@@ -242,6 +243,19 @@ export default function SettingsScreen() {
               © Off Book. Scripts uploaded remain your responsibility. For legal inquiries, contact the app developer.
             </Text>
           </View>
+          <TouchableOpacity
+            style={styles.viewTermsBtn}
+            onPress={() => {
+              Alert.alert(
+                'View Terms & Conditions',
+                'To review the full Terms & Conditions, you can reinstall the app or contact support. The T&C were presented when you first opened Off Book.',
+                [{ text: 'OK', style: 'default' }]
+              );
+            }}
+          >
+            <Text style={styles.viewTermsBtnText}>View Full Terms</Text>
+            <Ionicons name="chevron-forward" size={16} color={Colors.accent} />
+          </TouchableOpacity>
         </Card>
 
         <Text style={styles.version}>Off Book · v1.0.0</Text>
@@ -360,6 +374,20 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     lineHeight: 16,
     fontStyle: 'italic',
+  },
+  viewTermsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Spacing.sm,
+    marginTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  viewTermsBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.accent,
   },
   storageRow: {
     gap: Spacing.sm,
