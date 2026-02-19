@@ -1,0 +1,7 @@
+{
+  "name": "pdf-text-extractor",
+  "version": "1.0.0",
+  "description": "Native PDFKit-based PDF text extraction",
+  "main": "src/index.ts",
+  "private": true
+}

@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Purchases from 'react-native-purchases';
 import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
 import { getSettings, saveSettings } from '@/lib/storage';
 import { getAudioStorageUsed, deleteAllAudio } from '@/lib/audio';
@@ -85,30 +84,10 @@ export default function SettingsScreen() {
   };
 
   const handleUpgradeStorage = async () => {
-    try {
-      const products = await Purchases.getProducts(['com.offbook.app.storage.premium']);
-      if (products.length === 0) {
-        Alert.alert('Not Available', 'Storage upgrade is not available right now. Configure RevenueCat to enable purchases.');
-        return;
-      }
-
-      const { customerInfo } = await Purchases.purchaseStoreProduct(products[0]);
-
-      // Check if subscription was successful
-      if (customerInfo.activeSubscriptions.includes('com.offbook.app.storage.premium')) {
-        await saveSettings({ audioStorageSubscribed: true });
-        setSettings(s => ({ ...s, audioStorageSubscribed: true }));
-        Alert.alert('Success', 'Unlimited audio storage activated!');
-      }
-    } catch (err: any) {
-      if (!err.userCancelled) {
-        console.warn('Purchases error:', err.message);
-        Alert.alert(
-          'Purchases Not Available',
-          'In-app purchases are not configured. Set your RevenueCat API key to enable this feature.'
-        );
-      }
-    }
+    Alert.alert(
+      'Upgrade Storage',
+      'In-app purchases will be available in a future release. For now, manage your 500MB limit by deleting old recordings.'
+    );
   };
 
   const handleSave = async () => {

@@ -1,7 +1,7 @@
 import { Script, Scene, Line, FeedbackResult } from '@/types';
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = 'claude-haiku-4-5-20251001';
 
 function xhrPost(url: string, headers: Record<string, string>, body: string): Promise<string> {
   return new Promise((resolve, reject) => {

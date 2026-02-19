@@ -13,7 +13,6 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import Purchases from 'react-native-purchases';
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
@@ -121,52 +120,12 @@ export default function RecordScreen() {
         await handleStopRecording();
       }
 
-      // Check storage limit and subscription
-      const settings = await getSettings();
+      // Check storage limit
       const storageStatus = await checkStorageLimit();
-      if (storageStatus.overLimit && !settings.audioStorageSubscribed) {
+      if (storageStatus.overLimit) {
         Alert.alert(
           'Storage Limit Reached',
-          'You have reached the 500MB audio limit. Delete some recordings to continue, or upgrade for unlimited storage.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete Recordings',
-              style: 'destructive',
-              onPress: () => {
-                // User will need to go to settings to delete
-                Alert.alert('Delete Recordings', 'Go to Settings > Audio Storage to delete recordings.');
-              },
-            },
-            {
-              text: 'Upgrade',
-              style: 'default',
-              onPress: async () => {
-                try {
-                  const products = await Purchases.getProducts(['com.offbook.app.storage.premium']);
-                  if (products.length === 0) {
-                    Alert.alert(
-                      'Not Available',
-                      'Upgrade not available. Configure your RevenueCat API key in the app settings.'
-                    );
-                    return;
-                  }
-
-                  const { customerInfo } = await Purchases.purchaseStoreProduct(products[0]);
-
-                  if (customerInfo.activeSubscriptions.includes('com.offbook.app.storage.premium')) {
-                    await saveSettings({ audioStorageSubscribed: true });
-                    Alert.alert('Success', 'Unlimited storage activated! Try recording again.');
-                  }
-                } catch (err: any) {
-                  if (!err.userCancelled) {
-                    console.warn('Purchase error:', err.message);
-                    Alert.alert('Error', 'Could not complete purchase. Please try again later.');
-                  }
-                }
-              },
-            },
-          ]
+          'You have reached the 500MB audio limit. Delete some recordings in Settings > Audio Storage to continue.'
         );
         return;
       }
