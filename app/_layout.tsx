@@ -1,6 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +16,6 @@ export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     ...Ionicons.font,
   });
-  const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (fontsLoaded) {
@@ -27,14 +26,13 @@ export default function RootLayout() {
   // Check T&C acceptance on app launch
   useEffect(() => {
     getSettings().then(settings => {
-      setTermsAccepted(settings.hasAcceptedTerms ?? false);
       if (!settings.hasAcceptedTerms) {
         router.replace('/welcome');
       }
     });
   }, []);
 
-  if (!fontsLoaded || termsAccepted === null) return null;
+  if (!fontsLoaded) return null;
 
   return (
     <>
