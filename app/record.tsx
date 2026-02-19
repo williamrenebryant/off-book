@@ -30,7 +30,7 @@ import { Script, Line, Scene, LineType } from '@/types';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 
-type Step = 'setup' | 'record' | 'review' | 'save';
+type Step = 'title' | 'setup' | 'record' | 'review' | 'save';
 
 interface RecordedLine {
   id: string;
@@ -44,7 +44,10 @@ export default function RecordScreen() {
   const router = useRouter();
 
   // Step state
-  const [step, setStep] = useState<Step>('setup');
+  const [step, setStep] = useState<Step>('title');
+
+  // Title step
+  const [scriptTitle, setScriptTitle] = useState('');
 
   // Setup step
   const [sceneTitle, setSceneTitle] = useState('');
@@ -63,7 +66,6 @@ export default function RecordScreen() {
   // Save step
   const [addToExisting, setAddToExisting] = useState(false);
   const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null);
-  const [newScriptTitle, setNewScriptTitle] = useState('');
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
   const [existingScripts, setExistingScripts] = useState<Script[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -253,7 +255,7 @@ export default function RecordScreen() {
       return;
     }
 
-    if (!addToExisting && !newScriptTitle.trim()) {
+    if (!addToExisting && !scriptTitle.trim()) {
       Alert.alert('Script Title Required', 'Please enter a script title.');
       return;
     }
@@ -305,7 +307,7 @@ export default function RecordScreen() {
         // Create new script
         const newScript: Script = {
           id: `script_${Date.now()}`,
-          title: newScriptTitle.trim(),
+          title: scriptTitle.trim(),
           characters: [selectedCharacter],
           selectedCharacter,
           scenes: [newScene],
@@ -328,6 +330,46 @@ export default function RecordScreen() {
       setIsSaving(false);
     }
   };
+
+  // TITLE STEP
+  if (step === 'title') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+            <Ionicons name="close" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.topTitle}>New Script</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.form}>
+          <Text style={styles.stepTitle}>What's the name of your script?</Text>
+          <Text style={styles.stepSub}>
+            This will be the title of your script. You can record multiple scenes for it.
+          </Text>
+
+          <Text style={styles.label}>Script Title</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Hamlet, Romeo & Juliet..."
+            placeholderTextColor={Colors.textLight}
+            value={scriptTitle}
+            onChangeText={setScriptTitle}
+            autoFocus
+          />
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <Button
+            label="Continue"
+            onPress={() => setStep('setup')}
+            disabled={!scriptTitle.trim()}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // SETUP STEP
   if (step === 'setup') {
@@ -579,14 +621,10 @@ export default function RecordScreen() {
 
           {!addToExisting ? (
             <>
-              <Text style={styles.label}>Script Title</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Hamlet"
-                placeholderTextColor={Colors.textLight}
-                value={newScriptTitle}
-                onChangeText={setNewScriptTitle}
-              />
+              <Card style={styles.section}>
+                <Text style={styles.label}>Script Title</Text>
+                <Text style={styles.scriptTitleDisplay}>{scriptTitle}</Text>
+              </Card>
             </>
           ) : (
             <>
@@ -693,6 +731,11 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xl,
     fontWeight: '700',
     color: Colors.text,
+  },
+  stepSub: {
+    fontSize: FontSize.md,
+    color: Colors.textMuted,
+    lineHeight: 22,
   },
   label: {
     fontSize: FontSize.sm,
@@ -913,6 +956,12 @@ const styles = StyleSheet.create({
   },
   toggleBtnTextActive: {
     color: Colors.white,
+  },
+  scriptTitleDisplay: {
+    fontSize: FontSize.lg,
+    fontWeight: '600',
+    color: Colors.text,
+    marginTop: Spacing.xs,
   },
   scriptList: {
     maxHeight: 200,
