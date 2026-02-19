@@ -35,7 +35,7 @@ export default function CreateScreen() {
   };
 
   const handleUpload = () => {
-    router.push('/upload');
+    router.push({ pathname: '/upload', params: { scriptTitle: scriptTitle.trim() } });
   };
 
   // TITLE STEP

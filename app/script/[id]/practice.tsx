@@ -232,15 +232,16 @@ export default function PracticeScreen() {
         clearTimeout(autoStopTimerRef.current);
         autoStopTimerRef.current = null;
       }
+      const accumulated = accumulatedTranscriptRef.current;
       const fullText = segmentText
-        ? (accumulatedTranscriptRef.current + ' ' + segmentText).trim()
-        : accumulatedTranscriptRef.current;
+        ? (accumulated + ' ' + segmentText).trim()
+        : accumulated;
       accumulatedTranscriptRef.current = '';
 
       if (fullText) {
         // For accumulated multi-segment text, skip per-segment alternatives and
         // evaluate the full string directly.
-        const textToEval = accumulatedTranscriptRef.current
+        const textToEval = accumulated
           ? fullText
           : (() => {
               const alts = allAlternativesRef.current;

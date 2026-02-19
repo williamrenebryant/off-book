@@ -26,11 +26,11 @@ type Step = 'pick' | 'title' | 'parsing' | 'character' | 'merge_confirm';
 
 export default function UploadScreen() {
   const router = useRouter();
-  const { appendToScriptId } = useLocalSearchParams<{ appendToScriptId?: string }>();
+  const { appendToScriptId, scriptTitle: scriptTitleParam } = useLocalSearchParams<{ appendToScriptId?: string; scriptTitle?: string }>();
   const [existingScript, setExistingScript] = useState<Script | null>(null);
   const [step, setStep] = useState<Step>('pick');
   const [fileName, setFileName] = useState('');
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(scriptTitleParam ?? '');
   const [fileUri, setFileUri] = useState('');
   const [fileBase64, setFileBase64] = useState('');
   const [mimeType, setMimeType] = useState('');
@@ -52,6 +52,15 @@ export default function UploadScreen() {
 
     const asset = result.assets[0];
 
+    const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+    if (asset.size && asset.size > MAX_FILE_SIZE) {
+      Alert.alert(
+        'File Too Large',
+        `This file is ${(asset.size / (1024 * 1024)).toFixed(1)} MB. Please use a file under 20 MB. Try exporting your script as a .txt file for the best results.`
+      );
+      return;
+    }
+
     setFileName(asset.name);
     setFileUri(asset.uri);
     setMimeType(asset.mimeType ?? 'application/pdf');
@@ -67,7 +76,7 @@ export default function UploadScreen() {
     const guessedTitle = asset.name.replace(/\.(pdf|txt|rtf)$/i, '').replace(/[-_]/g, ' ');
     setTitle(guessedTitle);
 
-    if (appendToScriptId) {
+    if (appendToScriptId || scriptTitleParam) {
       setStep('parsing');  // will auto-trigger via useEffect
     } else {
       setStep('title');
@@ -556,6 +565,7 @@ const styles = StyleSheet.create({
   },
   warningCard: {
     marginHorizontal: 0,
+    width: '100%',
   },
   warningRow: {
     flexDirection: 'row',

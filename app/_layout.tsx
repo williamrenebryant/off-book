@@ -44,7 +44,6 @@ export default function RootLayout() {
         <Stack.Screen name="upload" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="record" options={{ presentation: 'modal', headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="script/[id]/index" options={{ headerShown: false }} />
-        <Stack.Screen name="script/[id]/scenes" options={{ headerShown: false }} />
         <Stack.Screen name="script/[id]/practice" options={{ headerShown: false }} />
       </Stack>
     </>

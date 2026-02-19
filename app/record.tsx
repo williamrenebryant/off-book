@@ -455,7 +455,7 @@ export default function RecordScreen() {
             autoFocus
           />
 
-          <Text style={styles.label} style={{ marginTop: Spacing.lg }}>
+          <Text style={[styles.label, { marginTop: Spacing.lg }]}>
             Characters in This Scene
           </Text>
 
@@ -741,7 +741,7 @@ export default function RecordScreen() {
                   >
                     <Text style={styles.scriptOptionText}>{script.title}</Text>
                     <Ionicons
-                      name={selectedScriptId === script.id ? 'checkmark-circle' : 'circle-outline'}
+                      name={selectedScriptId === script.id ? 'checkmark-circle' : 'ellipse-outline'}
                       size={20}
                       color={Colors.accent}
                     />
@@ -1142,6 +1142,10 @@ const styles = StyleSheet.create({
   },
   charSelectBtnTextActive: {
     color: Colors.white,
+  },
+  section: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   footer: {
     position: 'absolute',

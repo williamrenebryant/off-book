@@ -1,7 +1,7 @@
 import { Script, Scene, Line, FeedbackResult } from '@/types';
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-haiku-4-5-20251001';
+const SONNET = 'claude-sonnet-4-6';
 
 function xhrPost(url: string, headers: Record<string, string>, body: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -34,7 +34,7 @@ async function callClaude(
       'anthropic-version': '2023-06-01',
     },
     JSON.stringify({
-      model: MODEL,
+      model: SONNET,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages,
@@ -112,7 +112,12 @@ ${scriptText.slice(0, 50000)}`; // limit to avoid token overflow
 
   // Strip any markdown code blocks if Claude added them
   const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-  const parsed = JSON.parse(cleaned);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error(`Failed to parse script JSON from Claude: ${cleaned.slice(0, 200)}`);
+  }
 
   // Add cue lines to each line
   const scenesWithCues = parsed.scenes.map((scene: Scene) => {
@@ -172,7 +177,11 @@ Score guidelines (punctuation differences never affect score):
 
   const raw = await callClaude(apiKey, [{ role: 'user', content: prompt }], system, 512);
   const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    throw new Error(`Failed to parse evaluation JSON from Claude: ${cleaned.slice(0, 200)}`);
+  }
 }
 
 // --- Coaching Questions ---

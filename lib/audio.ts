@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
+import { AndroidOutputFormat, AndroidAudioEncoder, IOSOutputFormat, IOSAudioQuality } from 'expo-av/build/Audio/RecordingConstants';
 
 const FREE_AUDIO_LIMIT_BYTES = 500 * 1024 * 1024; // 500 MB
 const AUDIO_DIR = FileSystem.documentDirectory + 'cueline_audio/';
@@ -52,16 +53,16 @@ export async function startRecording(): Promise<Audio.Recording> {
     // Override to ensure AAC/M4A format
     android: {
       extension: '.m4a',
-      outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
-      audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
+      outputFormat: AndroidOutputFormat.MPEG_4,
+      audioEncoder: AndroidAudioEncoder.AAC,
       sampleRate: 11025,
       numberOfChannels: 1,
       bitRate: 12000,
     },
     ios: {
       extension: '.m4a',
-      outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_LINEARPCM,
-      audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_LOW,
+      outputFormat: IOSOutputFormat.LINEARPCM,
+      audioQuality: IOSAudioQuality.LOW,
       sampleRate: 11025,
       numberOfChannels: 1,
       bitRate: 12000,

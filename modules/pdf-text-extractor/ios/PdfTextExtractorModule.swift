@@ -32,8 +32,9 @@ public class PdfTextExtractorModule: Module {
       // --- Pass 2: Vision OCR fallback (scanned/image-based PDFs) ---
       var ocrPages: [String] = []
       let scale: CGFloat = 2.0
+      let maxOcrPages = min(document.pageCount, 50)
 
-      for i in 0..<document.pageCount {
+      for i in 0..<maxOcrPages {
         guard let page = document.page(at: i) else { continue }
         let bounds = page.bounds(for: .mediaBox)
         let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
