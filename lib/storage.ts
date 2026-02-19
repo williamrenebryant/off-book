@@ -66,6 +66,9 @@ export async function getSettings(): Promise<AppSettings> {
     speechLanguage: 'en-US',
     cueContext: 1,
     autoAdvance: false,
+    hasAcceptedTerms: false,
+    audioCueMode: 'text',
+    audioStorageSubscribed: false,
   };
   return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
 }

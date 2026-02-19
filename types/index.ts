@@ -11,6 +11,7 @@ export interface Line {
   text: string;
   type: LineType;
   cues: CueLine[]; // lines immediately before this one
+  audioUri?: string;
 }
 
 export interface Scene {
@@ -30,6 +31,7 @@ export interface Script {
   rawText?: string;
   pdfUri?: string;
   scriptToken?: string;
+  sourceType?: 'parsed' | 'recorded';
 }
 
 export interface LineProgress {
@@ -69,4 +71,7 @@ export interface AppSettings {
   speechLanguage: string;
   cueContext: number; // how many cue lines to show (1-3)
   autoAdvance: boolean;
+  hasAcceptedTerms?: boolean;
+  audioCueMode?: 'text' | 'audio';
+  audioStorageSubscribed?: boolean;
 }

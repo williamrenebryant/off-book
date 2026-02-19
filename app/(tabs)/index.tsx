@@ -97,13 +97,22 @@ export default function HomeScreen() {
         />
       )}
 
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => router.push('/upload')}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="add" size={28} color={Colors.white} />
-      </TouchableOpacity>
+      <View style={styles.fabContainer}>
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => router.push('/upload')}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={28} color={Colors.white} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.recordFab}
+          onPress={() => router.push('/record')}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="mic" size={24} color={Colors.white} />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -182,10 +191,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  fab: {
+  fabContainer: {
     position: 'absolute',
     bottom: Spacing.xl + 12,
     right: Spacing.lg,
+    gap: Spacing.sm,
+    alignItems: 'flex-end',
+  },
+  fab: {
     width: 56,
     height: 56,
     borderRadius: Radius.full,
@@ -197,5 +210,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  recordFab: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.accentDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.accentDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
 });

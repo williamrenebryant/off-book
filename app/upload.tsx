@@ -296,6 +296,15 @@ export default function UploadScreen() {
             <Text style={styles.dropTitle}>Upload your script</Text>
             <Text style={styles.dropSub}>PDF, TXT, or RTF supported</Text>
           </TouchableOpacity>
+
+          <Card style={styles.warningCard}>
+            <View style={styles.warningRow}>
+              <Ionicons name="alert-circle-outline" size={20} color={Colors.warning} />
+              <Text style={styles.warningText}>
+                You are responsible for ensuring you have the right to use this material. Only upload scripts you own or have licensed.
+              </Text>
+            </View>
+          </Card>
         </View>
       )}
 
@@ -310,6 +319,15 @@ export default function UploadScreen() {
               <TouchableOpacity onPress={() => setStep('pick')}>
                 <Ionicons name="close-circle" size={20} color={Colors.textLight} />
               </TouchableOpacity>
+            </View>
+          </Card>
+
+          <Card style={styles.warningCard}>
+            <View style={styles.warningRow}>
+              <Ionicons name="alert-circle-outline" size={20} color={Colors.warning} />
+              <Text style={styles.warningText}>
+                You are responsible for ensuring you have the right to use this material. Only upload scripts you own or have licensed.
+              </Text>
             </View>
           </Card>
 
@@ -657,5 +675,19 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.textMuted,
     marginTop: 1,
+  },
+  warningCard: {
+    marginHorizontal: 0,
+  },
+  warningRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.text,
+    lineHeight: 18,
   },
 });

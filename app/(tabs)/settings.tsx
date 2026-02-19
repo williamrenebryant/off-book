@@ -9,10 +9,13 @@ import {
   Switch,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Purchases from 'react-native-purchases';
 import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
 import { getSettings, saveSettings } from '@/lib/storage';
+import { getAudioStorageUsed, deleteAllAudio } from '@/lib/audio';
 import { AppSettings } from '@/types';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -23,13 +26,86 @@ export default function SettingsScreen() {
     speechLanguage: 'en-US',
     cueContext: 1,
     autoAdvance: false,
+    hasAcceptedTerms: false,
+    audioCueMode: 'text',
+    audioStorageSubscribed: false,
   });
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [audioUsed, setAudioUsed] = useState(0);
+  const [loadingAudio, setLoadingAudio] = useState(false);
+  const [isDeletingAudio, setIsDeletingAudio] = useState(false);
+
+  const AUDIO_LIMIT = 500 * 1024 * 1024; // 500 MB
 
   useEffect(() => {
     getSettings().then(setSettings);
   }, []);
+
+  useEffect(() => {
+    loadAudioStorage();
+  }, []);
+
+  const loadAudioStorage = async () => {
+    setLoadingAudio(true);
+    try {
+      const used = await getAudioStorageUsed();
+      setAudioUsed(used);
+    } catch (err) {
+      console.warn('Failed to load audio storage:', err);
+    } finally {
+      setLoadingAudio(false);
+    }
+  };
+
+  const handleDeleteAllAudio = () => {
+    Alert.alert(
+      'Delete All Recordings?',
+      'This will permanently delete all recorded audio files. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeletingAudio(true);
+            try {
+              await deleteAllAudio();
+              setAudioUsed(0);
+              Alert.alert('Success', 'All recordings deleted.');
+            } catch (err: any) {
+              Alert.alert('Error', err.message);
+            } finally {
+              setIsDeletingAudio(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleUpgradeStorage = async () => {
+    try {
+      const products = await Purchases.getProducts(['com.offbook.app.storage.premium']);
+      if (products.length === 0) {
+        Alert.alert('Not Available', 'Storage upgrade is not available right now.');
+        return;
+      }
+
+      const { customerInfo } = await Purchases.purchaseStoreProduct(products[0]);
+
+      // Check if subscription was successful
+      if (customerInfo.activeSubscriptions.includes('com.offbook.app.storage.premium')) {
+        await saveSettings({ audioStorageSubscribed: true });
+        setSettings(s => ({ ...s, audioStorageSubscribed: true }));
+        Alert.alert('Success', 'Unlimited audio storage activated!');
+      }
+    } catch (err: any) {
+      if (!err.userCancelled) {
+        Alert.alert('Error', err.message);
+      }
+    }
+  };
 
   const handleSave = async () => {
     await saveSettings(settings);
@@ -121,6 +197,69 @@ export default function SettingsScreen() {
           onPress={handleSave}
           style={styles.saveBtn}
         />
+
+        <Card style={styles.section}>
+          <Text style={styles.sectionTitle}>Audio Storage</Text>
+
+          {loadingAudio ? (
+            <ActivityIndicator size="small" color={Colors.accent} />
+          ) : (
+            <>
+              <View style={styles.storageRow}>
+                <View style={styles.storageInfo}>
+                  <Text style={styles.storageLabel}>
+                    {(audioUsed / (1024 * 1024)).toFixed(1)} MB of 500 MB
+                  </Text>
+                  <View style={styles.progressBar}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${Math.min(100, (audioUsed / AUDIO_LIMIT) * 100)}%`,
+                          backgroundColor:
+                            audioUsed > AUDIO_LIMIT
+                              ? Colors.error
+                              : audioUsed > AUDIO_LIMIT * 0.8
+                              ? Colors.warning
+                              : Colors.success,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <Button
+                label="Delete All Recordings"
+                variant="secondary"
+                onPress={handleDeleteAllAudio}
+                disabled={audioUsed === 0 || isDeletingAudio}
+                style={{ marginTop: Spacing.sm }}
+              />
+
+              {audioUsed > AUDIO_LIMIT && !settings.audioStorageSubscribed && (
+                <Button
+                  label="Upgrade for Unlimited Storage"
+                  onPress={handleUpgradeStorage}
+                  style={{ marginTop: Spacing.sm }}
+                />
+              )}
+            </>
+          )}
+        </Card>
+
+        <Card style={styles.section}>
+          <Text style={styles.sectionTitle}>Legal</Text>
+          <View style={styles.legalContent}>
+            <Text style={styles.sectionDesc}>
+              <Text style={styles.legalBold}>Terms & Conditions</Text>
+              {'\n'}You are responsible for the scripts you upload. Review full terms when you agreed to use this app.
+            </Text>
+            <Text style={styles.copyrightNotice}>
+              © Off Book. Scripts uploaded remain your responsibility. For legal inquiries, contact the app developer.
+            </Text>
+          </View>
+        </Card>
 
         <Text style={styles.version}>Off Book · v1.0.0</Text>
       </ScrollView>
@@ -225,5 +364,39 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textLight,
     marginTop: Spacing.md,
+  },
+  legalContent: {
+    gap: Spacing.sm,
+  },
+  legalBold: {
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  copyrightNotice: {
+    fontSize: FontSize.xs,
+    color: Colors.textLight,
+    lineHeight: 16,
+    fontStyle: 'italic',
+  },
+  storageRow: {
+    gap: Spacing.sm,
+  },
+  storageInfo: {
+    gap: Spacing.sm,
+  },
+  storageLabel: {
+    fontSize: FontSize.sm,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: Colors.border,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: Radius.full,
   },
 });

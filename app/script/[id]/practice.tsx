@@ -19,8 +19,9 @@ import {
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
 import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
-import { getScript, getProgress, saveProgress, initProgress, getSettings, saveScript } from '@/lib/storage';
+import { getScript, getProgress, saveProgress, initProgress, getSettings, saveSettings, saveScript } from '@/lib/storage';
 import { evaluateLine, getHint, getCoachingQuestion } from '@/lib/claude';
+import { playAudio, stopAudio } from '@/lib/audio';
 import { evaluateLineViaBackend, getHintViaBackend, getCoachingViaBackend } from '@/lib/backend';
 import { Script, Scene, Line, ScriptProgress, LineProgress, FeedbackResult, AppSettings } from '@/types';
 import Card from '@/components/ui/Card';
@@ -99,6 +100,7 @@ export default function PracticeScreen() {
   const [configThreshold, setConfigThreshold] = useState(80);
   const [configLineCount, setConfigLineCount] = useState<number | null>(null);
   const [autoAdvancing, setAutoAdvancing] = useState(false);
+  const [cueMode, setCueMode] = useState<'text' | 'audio'>('text');
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -256,6 +258,7 @@ export default function PracticeScreen() {
         if (!s) return;
         setScript(s);
         setSettings(set);
+        setCueMode(set.audioCueMode ?? 'text');
 
         const foundScene = s.scenes.find((sc) => sc.id === sceneId);
         if (!foundScene) return;
@@ -640,6 +643,24 @@ export default function PracticeScreen() {
     Speech.speak(text, { language: 'en-US', rate: 0.9 });
   };
 
+  // Play audio cue if available, otherwise fall back to TTS
+  const handlePlayAudioCue = async () => {
+    if (!currentLine || cueMode !== 'audio') return;
+
+    // Try to play audio cue for the current line
+    if (currentLine.audioUri) {
+      try {
+        await playAudio(currentLine.audioUri);
+      } catch (err) {
+        // Fall back to TTS if audio fails
+        handleSpeakCue(currentLine.text);
+      }
+    } else {
+      // No audio available, use TTS
+      handleSpeakCue(currentLine.text);
+    }
+  };
+
   const handleCoachingQuestion = async () => {
     if (!currentLine || !scene) return;
     try {
@@ -911,6 +932,24 @@ export default function PracticeScreen() {
                 >
                   <Text style={[styles.segmentBtnText, configLineCount === n && styles.segmentBtnTextActive]}>
                     {n === null ? 'All' : String(n)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.configSectionLabel}>Cue mode</Text>
+            <View style={styles.segmentRow}>
+              {(['text', 'audio'] as const).map(mode => (
+                <TouchableOpacity
+                  key={mode}
+                  style={[styles.segmentBtn, cueMode === mode && styles.segmentBtnActive]}
+                  onPress={() => {
+                    setCueMode(mode);
+                    saveSettings({ audioCueMode: mode });
+                  }}
+                >
+                  <Text style={[styles.segmentBtnText, cueMode === mode && styles.segmentBtnTextActive]}>
+                    {mode === 'text' ? 'Read' : 'Hear'}
                   </Text>
                 </TouchableOpacity>
               ))}
