@@ -25,7 +25,7 @@ import {
   stopAudio,
   checkStorageLimit,
 } from '@/lib/audio';
-import { getSettings, saveScript, getScripts, saveSettings } from '@/lib/storage';
+import { getSettings, saveScript, getScripts, saveSettings, getScript } from '@/lib/storage';
 import { Script, Line, Scene, LineType } from '@/types';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -51,6 +51,36 @@ export default function RecordScreen() {
 
   const isAddingScene = params.isAddingScene === 'true';
   const existingCharactersArray = params.existingCharacters ? params.existingCharacters.split(',') : [];
+  const [sortedExistingCharacters, setSortedExistingCharacters] = useState<string[]>(existingCharactersArray);
+
+  // Load script and sort characters by line count
+  useEffect(() => {
+    if (isAddingScene && params.scriptId) {
+      getScript(params.scriptId).then((script) => {
+        if (script) {
+          // Count lines per character
+          const charLineCount: { [key: string]: number } = {};
+          existingCharactersArray.forEach((char) => {
+            charLineCount[char] = 0;
+          });
+
+          script.scenes.forEach((scene) => {
+            scene.lines.forEach((line) => {
+              if (charLineCount.hasOwnProperty(line.character)) {
+                charLineCount[line.character]++;
+              }
+            });
+          });
+
+          // Sort characters by line count (descending)
+          const sorted = [...existingCharactersArray].sort(
+            (a, b) => charLineCount[b] - charLineCount[a]
+          );
+          setSortedExistingCharacters(sorted);
+        }
+      });
+    }
+  }, [isAddingScene, params.scriptId]);
 
   // Step state
   const [step, setStep] = useState<Step>(
@@ -418,11 +448,11 @@ export default function RecordScreen() {
             Characters in This Scene
           </Text>
 
-          {existingCharactersArray.length > 0 && (
+          {sortedExistingCharacters.length > 0 && (
             <>
               <Text style={styles.quickSelectLabel}>Quick select existing characters:</Text>
               <View style={styles.quickSelectRow}>
-                {existingCharactersArray.map((char) => (
+                {sortedExistingCharacters.map((char) => (
                   <TouchableOpacity
                     key={char}
                     style={[
