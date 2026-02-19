@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import {
@@ -42,12 +42,13 @@ interface RecordedLine {
 
 export default function RecordScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ scriptTitle?: string }>();
 
   // Step state
-  const [step, setStep] = useState<Step>('title');
+  const [step, setStep] = useState<Step>(params.scriptTitle ? 'setup' : 'title');
 
   // Title step
-  const [scriptTitle, setScriptTitle] = useState('');
+  const [scriptTitle, setScriptTitle] = useState(params.scriptTitle ?? '');
 
   // Setup step
   const [sceneTitle, setSceneTitle] = useState('');

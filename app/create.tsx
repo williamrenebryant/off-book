@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,14 +14,76 @@ import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 
+type Step = 'title' | 'options';
+
 export default function CreateScreen() {
   const router = useRouter();
+  const [step, setStep] = useState<Step>('title');
+  const [scriptTitle, setScriptTitle] = useState('');
 
+  const handleContinue = () => {
+    if (scriptTitle.trim()) {
+      setStep('options');
+    }
+  };
+
+  const handleRecord = () => {
+    router.push({
+      pathname: '/record',
+      params: { scriptTitle: scriptTitle.trim() },
+    });
+  };
+
+  const handleUpload = () => {
+    router.push('/upload');
+  };
+
+  // TITLE STEP
+  if (step === 'title') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+            <Ionicons name="close" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.topTitle}>New Script</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.form}>
+          <Text style={styles.title}>What's the name of your script?</Text>
+          <Text style={styles.subtitle}>
+            This will be the title of your script. You can record multiple scenes for it.
+          </Text>
+
+          <Text style={styles.label}>Script Title</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Hamlet, Romeo & Juliet..."
+            placeholderTextColor={Colors.textLight}
+            value={scriptTitle}
+            onChangeText={setScriptTitle}
+            autoFocus
+          />
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <Button
+            label="Continue"
+            onPress={handleContinue}
+            disabled={!scriptTitle.trim()}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // OPTIONS STEP
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
-          <Ionicons name="close" size={24} color={Colors.text} />
+        <TouchableOpacity onPress={() => setStep('title')} style={styles.closeBtn}>
+          <Ionicons name="chevron-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>Create Script</Text>
         <View style={{ width: 40 }} />
@@ -27,13 +91,14 @@ export default function CreateScreen() {
 
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>How would you like to create a script?</Text>
+          <Text style={styles.title}>How would you like to add scenes?</Text>
+          <Text style={styles.scriptTitleDisplay}>{scriptTitle}</Text>
         </View>
 
         {/* Main option: Record a scene */}
         <TouchableOpacity
           style={styles.primaryOption}
-          onPress={() => router.push('/record')}
+          onPress={handleRecord}
           activeOpacity={0.85}
         >
           <View style={styles.primaryContent}>
@@ -43,7 +108,7 @@ export default function CreateScreen() {
             <View style={styles.primaryText}>
               <Text style={styles.primaryTitle}>Record a Scene</Text>
               <Text style={styles.primaryDesc}>
-                Speak your lines and create a new script from your recordings
+                Speak your lines and create scenes from your recordings
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.accent} />
@@ -54,7 +119,7 @@ export default function CreateScreen() {
         <Card style={styles.secondaryOption}>
           <TouchableOpacity
             style={styles.secondaryContent}
-            onPress={() => router.push('/upload')}
+            onPress={handleUpload}
             activeOpacity={0.75}
           >
             <View style={styles.secondaryIconBg}>
@@ -98,6 +163,57 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
 
+  // Title step
+  scroll: {
+    flex: 1,
+  },
+  form: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+    gap: Spacing.md,
+    paddingBottom: 120,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+  },
+  title: {
+    fontSize: FontSize.xl,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  subtitle: {
+    fontSize: FontSize.md,
+    color: Colors.textMuted,
+    lineHeight: 22,
+  },
+  label: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: Spacing.lg,
+  },
+  input: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    fontSize: FontSize.md,
+    color: Colors.text,
+  },
+
+  // Options step
   content: {
     flex: 1,
     paddingHorizontal: Spacing.lg,
@@ -107,10 +223,10 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.sm,
   },
-  title: {
-    fontSize: FontSize.xl,
-    fontWeight: '700',
-    color: Colors.text,
+  scriptTitleDisplay: {
+    fontSize: FontSize.lg,
+    fontWeight: '600',
+    color: Colors.accent,
   },
 
   // Primary option
