@@ -180,20 +180,33 @@ export default function ScriptOverviewScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      <TouchableOpacity
-        style={styles.addScenesBtn}
-        onPress={() => router.push({
-          pathname: '/record',
-          params: {
-            scriptId: script!.id,
-            existingCharacters: script!.characters.join(','),
-            isAddingScene: 'true'
-          },
-        })}
-      >
-        <Ionicons name="mic-outline" size={18} color={Colors.accent} />
-        <Text style={styles.addScenesBtnText}>Add a recorded scene</Text>
-      </TouchableOpacity>
+      <View style={styles.addScenesRow}>
+        <TouchableOpacity
+          style={styles.addScenesBtn}
+          onPress={() => router.push({
+            pathname: '/record',
+            params: {
+              scriptId: script!.id,
+              existingCharacters: script!.characters.join(','),
+              isAddingScene: 'true'
+            },
+          })}
+        >
+          <Ionicons name="mic-outline" size={18} color={Colors.accent} />
+          <Text style={styles.addScenesBtnText}>Record a scene</Text>
+        </TouchableOpacity>
+        <View style={styles.addScenesDivider} />
+        <TouchableOpacity
+          style={styles.addScenesBtn}
+          onPress={() => router.push({
+            pathname: '/upload',
+            params: { appendToScriptId: script!.id },
+          })}
+        >
+          <Ionicons name="cloud-upload-outline" size={18} color={Colors.accent} />
+          <Text style={styles.addScenesBtnText}>Upload PDF</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -335,14 +348,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  addScenesRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
   addScenesBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     padding: Spacing.md,
     justifyContent: 'center',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+  },
+  addScenesDivider: {
+    width: 1,
+    backgroundColor: Colors.border,
+    marginVertical: Spacing.sm,
   },
   addScenesBtnText: {
     fontSize: FontSize.sm,
