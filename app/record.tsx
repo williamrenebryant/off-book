@@ -204,7 +204,7 @@ export default function RecordScreen() {
           audioUri: result.uri,
           durationMs: result.durationMs,
         };
-        setRecordedLines([newLine, ...recordedLines]);
+        setRecordedLines([...recordedLines, newLine]);
       }
 
       // Reset state
