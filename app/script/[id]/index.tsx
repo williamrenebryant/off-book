@@ -157,10 +157,17 @@ export default function ScriptOverviewScreen() {
 
       <TouchableOpacity
         style={styles.addScenesBtn}
-        onPress={() => router.push(`/upload?appendToScriptId=${script!.id}`)}
+        onPress={() => router.push({
+          pathname: '/record',
+          params: {
+            scriptId: script!.id,
+            existingCharacters: script!.characters.join(','),
+            isAddingScene: 'true'
+          },
+        })}
       >
-        <Ionicons name="add-circle-outline" size={18} color={Colors.accent} />
-        <Text style={styles.addScenesBtnText}>Add more scenes</Text>
+        <Ionicons name="mic-outline" size={18} color={Colors.accent} />
+        <Text style={styles.addScenesBtnText}>Add a recorded scene</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );

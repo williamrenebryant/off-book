@@ -42,10 +42,20 @@ interface RecordedLine {
 
 export default function RecordScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ scriptTitle?: string }>();
+  const params = useLocalSearchParams<{
+    scriptTitle?: string;
+    scriptId?: string;
+    existingCharacters?: string;
+    isAddingScene?: string;
+  }>();
+
+  const isAddingScene = params.isAddingScene === 'true';
+  const existingCharactersArray = params.existingCharacters ? params.existingCharacters.split(',') : [];
 
   // Step state
-  const [step, setStep] = useState<Step>(params.scriptTitle ? 'setup' : 'title');
+  const [step, setStep] = useState<Step>(
+    params.scriptTitle || params.scriptId ? 'setup' : 'title'
+  );
 
   // Title step
   const [scriptTitle, setScriptTitle] = useState(params.scriptTitle ?? '');
@@ -79,7 +89,14 @@ export default function RecordScreen() {
   // Load existing scripts for save step
   useEffect(() => {
     if (step === 'save') {
-      getScripts().then(setExistingScripts);
+      getScripts().then((scripts) => {
+        setExistingScripts(scripts);
+        // If adding to existing script from detail screen, auto-select it
+        if (isAddingScene && params.scriptId) {
+          setAddToExisting(true);
+          setSelectedScriptId(params.scriptId);
+        }
+      });
     }
   }, [step]);
 
@@ -400,6 +417,40 @@ export default function RecordScreen() {
           <Text style={styles.label} style={{ marginTop: Spacing.lg }}>
             Characters in This Scene
           </Text>
+
+          {existingCharactersArray.length > 0 && (
+            <>
+              <Text style={styles.quickSelectLabel}>Quick select existing characters:</Text>
+              <View style={styles.quickSelectRow}>
+                {existingCharactersArray.map((char) => (
+                  <TouchableOpacity
+                    key={char}
+                    style={[
+                      styles.quickSelectBtn,
+                      characters.includes(char) && styles.quickSelectBtnActive,
+                    ]}
+                    onPress={() => {
+                      if (characters.includes(char)) {
+                        setCharacters(characters.filter((c) => c !== char));
+                      } else {
+                        setCharacters([...characters, char]);
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.quickSelectBtnText,
+                        characters.includes(char) && styles.quickSelectBtnTextActive,
+                      ]}
+                    >
+                      {char}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+
           <View style={styles.characterInputRow}>
             <TextInput
               style={styles.characterInput}
@@ -589,9 +640,9 @@ export default function RecordScreen() {
         </View>
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.form}>
-          <Text style={styles.stepTitle}>Where to save?</Text>
+          {!isAddingScene && <Text style={styles.stepTitle}>Where to save?</Text>}
 
-          <View style={styles.toggleRow}>
+          {!isAddingScene && <View style={styles.toggleRow}>
             <TouchableOpacity
               style={[styles.toggleBtn, !addToExisting && styles.toggleBtnActive]}
               onPress={() => {
@@ -623,15 +674,16 @@ export default function RecordScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          )}
 
-          {!addToExisting ? (
+          {!isAddingScene && !addToExisting ? (
             <>
               <Card style={styles.section}>
                 <Text style={styles.label}>Script Title</Text>
                 <Text style={styles.scriptTitleDisplay}>{scriptTitle}</Text>
               </Card>
             </>
-          ) : (
+          ) : !isAddingScene && addToExisting ? (
             <>
               <Text style={styles.label}>Select Script</Text>
               <ScrollView style={styles.scriptList}>
@@ -758,6 +810,40 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm + 2,
     fontSize: FontSize.md,
     color: Colors.text,
+  },
+  quickSelectLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '600',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: Spacing.xs,
+  },
+  quickSelectRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  quickSelectBtn: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  quickSelectBtnActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  quickSelectBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  quickSelectBtnTextActive: {
+    color: Colors.white,
   },
   characterInputRow: {
     flexDirection: 'row',
