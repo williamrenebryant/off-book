@@ -4,7 +4,13 @@ import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
+import { Platform } from 'react-native';
+import Purchases from 'react-native-purchases';
 import 'react-native-reanimated';
+
+// Replace this with your RevenueCat iOS public API key from the dashboard.
+// Find it at: app.revenuecat.com → your project → API Keys
+const RC_IOS_API_KEY = 'appl_REPLACE_WITH_YOUR_REVENUECAT_IOS_API_KEY';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -24,6 +30,15 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      Purchases.configure({ apiKey: RC_IOS_API_KEY });
+      if (__DEV__) {
+        Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+      }
+    }
+  }, []);
 
   if (!fontsLoaded) return null;
 

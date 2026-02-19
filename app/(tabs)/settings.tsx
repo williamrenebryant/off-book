@@ -51,7 +51,7 @@ export default function SettingsScreen() {
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>Anthropic API Key</Text>
           <Text style={styles.sectionDesc}>
-            Required for script parsing, line feedback, and coaching. Get a key at console.anthropic.com.
+            Advanced: Enter your own Anthropic API key to skip in-app purchases and call Claude directly. Leave blank to use the standard in-app purchase flow.
           </Text>
           <View style={styles.keyRow}>
             <TextInput

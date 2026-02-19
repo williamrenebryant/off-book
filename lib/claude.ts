@@ -108,7 +108,7 @@ If there are no clear scene breaks, put everything in one scene.
 Script text:
 ${scriptText.slice(0, 50000)}`; // limit to avoid token overflow
 
-  const raw = await callClaude(apiKey, [{ role: 'user', content: prompt }], system, 8192);
+  const raw = await callClaude(apiKey, [{ role: 'user', content: prompt }], system, 32000);
 
   // Strip any markdown code blocks if Claude added them
   const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
@@ -152,16 +152,18 @@ Correct line: "${correctText}"
 What the actor said: "${spokenText}"
 Scene context: ${context}
 
+IMPORTANT: The actor's text was captured by speech-to-text, which never includes punctuation. Ignore ALL punctuation differences (missing commas, periods, exclamation marks, question marks, etc.) completely — they should have zero effect on the score.
+
 Evaluate their attempt and respond with ONLY valid JSON in this format:
 {
   "accurate": true/false,
   "score": 0-100,
   "feedback": "Brief, warm feedback (1-2 sentences)",
-  "corrections": "Only include if score < 90: specifically what was wrong",
+  "corrections": "Only include if score < 90: specifically what words were wrong or missing (never mention punctuation)",
   "hint": "Only include if score < 50: a helpful hint (first few words, or a clue about the line)"
 }
 
-Score guidelines:
+Score guidelines (punctuation differences never affect score):
 - 95-100: Word-perfect or only trivial differences (articles, minor word order)
 - 80-94: Got the gist, minor word substitutions that don't change meaning
 - 60-79: Correct meaning but notable word differences

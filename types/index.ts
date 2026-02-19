@@ -29,6 +29,7 @@ export interface Script {
   createdAt: string;
   rawText?: string;
   pdfUri?: string;
+  scriptToken?: string;
 }
 
 export interface LineProgress {
@@ -39,6 +40,7 @@ export interface LineProgress {
   mastered: boolean;
   readyForTest?: boolean;
   practiceDuration?: number;
+  practiceTranscript?: string; // how this actor's voice sounds saying this line
 }
 
 export interface SceneProgress {
