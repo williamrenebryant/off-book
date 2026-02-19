@@ -16,18 +16,7 @@ export default function Logo({ size = 60 }: LogoProps) {
     <View style={styles.container}>
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <G>
-          {/* Diagonal line */}
-          <Line
-            x1="0"
-            y1="0"
-            x2={size}
-            y2={size}
-            stroke={Colors.purple}
-            strokeWidth={lineWidth}
-            strokeLinecap="round"
-          />
-
-          {/* C arc (75% of circle, from 45 to 315 degrees) */}
+          {/* C arc (75% of circle, from 45 to 315 degrees) with squared edges */}
           <Circle
             cx={size / 2}
             cy={size / 2}
@@ -35,7 +24,7 @@ export default function Logo({ size = 60 }: LogoProps) {
             fill="none"
             stroke={Colors.accent}
             strokeWidth={size / 8}
-            strokeLinecap="round"
+            strokeLinecap="butt"
             strokeDasharray={`${(270 / 360) * 2 * Math.PI * arcRadius} ${2 * Math.PI * arcRadius}`}
             strokeDashoffset={`${(-45 / 360) * 2 * Math.PI * arcRadius}`}
             rotation={0}
@@ -48,6 +37,17 @@ export default function Logo({ size = 60 }: LogoProps) {
             cy={size / 2}
             r={dotRadius}
             fill={Colors.purple}
+          />
+
+          {/* Diagonal line (in front) */}
+          <Line
+            x1="0"
+            y1="0"
+            x2={size}
+            y2={size}
+            stroke={Colors.purple}
+            strokeWidth={lineWidth}
+            strokeLinecap="butt"
           />
         </G>
       </Svg>
