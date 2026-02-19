@@ -84,7 +84,7 @@ export default function HomeScreen() {
           <Ionicons name="document-text-outline" size={56} color={Colors.textLight} />
           <Text style={styles.emptyTitle}>No scripts yet</Text>
           <Text style={styles.emptyText}>
-            Tap the + button to upload your first script.
+            Tap the + button to create your first script by recording or uploading.
           </Text>
         </View>
       ) : (
@@ -100,17 +100,10 @@ export default function HomeScreen() {
       <View style={styles.fabContainer}>
         <TouchableOpacity
           style={styles.fab}
-          onPress={() => router.push('/upload')}
+          onPress={() => router.push('/create')}
           activeOpacity={0.85}
         >
           <Ionicons name="add" size={28} color={Colors.white} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.recordFab}
-          onPress={() => router.push('/record')}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="mic" size={24} color={Colors.white} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -193,10 +186,8 @@ const styles = StyleSheet.create({
   },
   fabContainer: {
     position: 'absolute',
-    bottom: Spacing.xl + 12,
+    bottom: Spacing.xl,
     right: Spacing.lg,
-    gap: Spacing.sm,
-    alignItems: 'flex-end',
   },
   fab: {
     width: 56,
@@ -210,18 +201,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
-  },
-  recordFab: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.accentDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.accentDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
   },
 });

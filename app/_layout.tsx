@@ -40,6 +40,7 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="welcome" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="create" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="upload" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="record" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="script/[id]/index" options={{ headerShown: false }} />
