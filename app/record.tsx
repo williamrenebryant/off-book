@@ -127,9 +127,17 @@ export default function RecordScreen() {
       if (storageStatus.overLimit && !settings.audioStorageSubscribed) {
         Alert.alert(
           'Storage Limit Reached',
-          'You have reached the 500MB audio limit. Upgrade to unlimited storage or delete some recordings.',
+          'You have reached the 500MB audio limit. Delete some recordings to continue, or upgrade for unlimited storage.',
           [
             { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete Recordings',
+              style: 'destructive',
+              onPress: () => {
+                // User will need to go to settings to delete
+                Alert.alert('Delete Recordings', 'Go to Settings > Audio Storage to delete recordings.');
+              },
+            },
             {
               text: 'Upgrade',
               style: 'default',
@@ -137,7 +145,10 @@ export default function RecordScreen() {
                 try {
                   const products = await Purchases.getProducts(['com.offbook.app.storage.premium']);
                   if (products.length === 0) {
-                    Alert.alert('Not Available', 'Upgrade not available right now.');
+                    Alert.alert(
+                      'Not Available',
+                      'Upgrade not available. Configure your RevenueCat API key in the app settings.'
+                    );
                     return;
                   }
 
@@ -149,7 +160,8 @@ export default function RecordScreen() {
                   }
                 } catch (err: any) {
                   if (!err.userCancelled) {
-                    Alert.alert('Error', err.message);
+                    console.warn('Purchase error:', err.message);
+                    Alert.alert('Error', 'Could not complete purchase. Please try again later.');
                   }
                 }
               },

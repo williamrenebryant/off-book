@@ -31,7 +31,8 @@ export default function RootLayout() {
   }, [fontsLoaded]);
 
   useEffect(() => {
-    if (Platform.OS === 'ios') {
+    // Only configure RevenueCat if a real API key is set (not the placeholder)
+    if (Platform.OS === 'ios' && RC_IOS_API_KEY !== 'appl_REPLACE_WITH_YOUR_REVENUECAT_IOS_API_KEY') {
       Purchases.configure({ apiKey: RC_IOS_API_KEY });
       if (__DEV__) {
         Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);

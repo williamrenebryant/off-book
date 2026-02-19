@@ -88,7 +88,7 @@ export default function SettingsScreen() {
     try {
       const products = await Purchases.getProducts(['com.offbook.app.storage.premium']);
       if (products.length === 0) {
-        Alert.alert('Not Available', 'Storage upgrade is not available right now.');
+        Alert.alert('Not Available', 'Storage upgrade is not available right now. Configure RevenueCat to enable purchases.');
         return;
       }
 
@@ -102,7 +102,11 @@ export default function SettingsScreen() {
       }
     } catch (err: any) {
       if (!err.userCancelled) {
-        Alert.alert('Error', err.message);
+        console.warn('Purchases error:', err.message);
+        Alert.alert(
+          'Purchases Not Available',
+          'In-app purchases are not configured. Set your RevenueCat API key to enable this feature.'
+        );
       }
     }
   };
