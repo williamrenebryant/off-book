@@ -5,7 +5,7 @@ import { Colors, Radius, Spacing, FontSize } from '@/constants/theme';
 interface ButtonProps {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'accent';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   disabled?: boolean;
@@ -67,6 +67,9 @@ const styles = StyleSheet.create({
   danger: {
     backgroundColor: Colors.error,
   },
+  accent: {
+    backgroundColor: Colors.purple,
+  },
   disabled: {
     opacity: 0.45,
   },
@@ -95,6 +98,9 @@ const styles = StyleSheet.create({
     color: Colors.accent,
   },
   label_danger: {
+    color: Colors.white,
+  },
+  label_accent: {
     color: Colors.white,
   },
   labelSize_sm: {

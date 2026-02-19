@@ -232,7 +232,7 @@ export default function SettingsScreen() {
           )}
         </Card>
 
-        <Card style={styles.section}>
+        <Card variant="accent" style={styles.section}>
           <Text style={styles.sectionTitle}>Legal</Text>
           <View style={styles.legalContent}>
             <Text style={styles.sectionDesc}>
@@ -254,7 +254,7 @@ export default function SettingsScreen() {
             }}
           >
             <Text style={styles.viewTermsBtnText}>View Full Terms</Text>
-            <Ionicons name="chevron-forward" size={16} color={Colors.accent} />
+            <Ionicons name="chevron-forward" size={16} color={Colors.purple} />
           </TouchableOpacity>
         </Card>
 
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
   viewTermsBtnText: {
     fontSize: FontSize.sm,
     fontWeight: '600',
-    color: Colors.accent,
+    color: Colors.purple,
   },
   storageRow: {
     gap: Spacing.sm,

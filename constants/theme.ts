@@ -4,6 +4,8 @@ export const Colors = {
   surfaceAlt: '#E3D9CC',
   accent: '#B07D62',
   accentDark: '#8A5E47',
+  purple: '#7B4397',
+  purpleLight: '#A366C8',
   text: '#2C2416',
   textMuted: '#7A6A56',
   textLight: '#A89880',

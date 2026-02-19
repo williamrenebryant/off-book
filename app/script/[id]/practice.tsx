@@ -928,7 +928,7 @@ export default function PracticeScreen() {
             />
           )}
           <Button label="Run Again" variant="secondary" onPress={handleRunSceneAgain} />
-          <Button label="Back to Script" onPress={() => router.back()} />
+          <Button label="Back to Script" variant="accent" onPress={() => router.back()} />
         </View>
       </SafeAreaView>
     );
@@ -962,7 +962,7 @@ export default function PracticeScreen() {
                 setPracticeStateAndRef(firstMode === 'test' ? 'cue' : 'practice_idle');
               }}
             />
-            <Button label="Back to Script" onPress={() => router.back()} />
+            <Button label="Back to Script" variant="accent" onPress={() => router.back()} />
           </View>
         </View>
       </SafeAreaView>
