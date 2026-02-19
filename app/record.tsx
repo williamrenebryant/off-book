@@ -640,40 +640,42 @@ export default function RecordScreen() {
         </View>
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.form}>
-          {!isAddingScene && <Text style={styles.stepTitle}>Where to save?</Text>}
-
-          {!isAddingScene && <View style={styles.toggleRow}>
-            <TouchableOpacity
-              style={[styles.toggleBtn, !addToExisting && styles.toggleBtnActive]}
-              onPress={() => {
-                setAddToExisting(false);
-                setSelectedScriptId(null);
-              }}
-            >
-              <Text style={[
-                styles.toggleBtnText,
-                !addToExisting && styles.toggleBtnTextActive,
-              ]}>
-                New Script
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.toggleBtn, addToExisting && styles.toggleBtnActive]}
-              onPress={() => {
-                setAddToExisting(true);
-                if (existingScripts.length > 0) {
-                  setSelectedScriptId(existingScripts[0].id);
-                }
-              }}
-            >
-              <Text style={[
-                styles.toggleBtnText,
-                addToExisting && styles.toggleBtnTextActive,
-              ]}>
-                Existing Script
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {!isAddingScene && (
+            <>
+              <Text style={styles.stepTitle}>Where to save?</Text>
+              <View style={styles.toggleRow}>
+                <TouchableOpacity
+                  style={[styles.toggleBtn, !addToExisting && styles.toggleBtnActive]}
+                  onPress={() => {
+                    setAddToExisting(false);
+                    setSelectedScriptId(null);
+                  }}
+                >
+                  <Text style={[
+                    styles.toggleBtnText,
+                    !addToExisting && styles.toggleBtnTextActive,
+                  ]}>
+                    New Script
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleBtn, addToExisting && styles.toggleBtnActive]}
+                  onPress={() => {
+                    setAddToExisting(true);
+                    if (existingScripts.length > 0) {
+                      setSelectedScriptId(existingScripts[0].id);
+                    }
+                  }}
+                >
+                  <Text style={[
+                    styles.toggleBtnText,
+                    addToExisting && styles.toggleBtnTextActive,
+                  ]}>
+                    Existing Script
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
 
           {!isAddingScene && !addToExisting ? (
