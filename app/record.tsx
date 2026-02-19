@@ -708,7 +708,7 @@ export default function RecordScreen() {
                 ))}
               </ScrollView>
             </>
-          )}
+          ) : null}
 
           <Text style={[styles.label, { marginTop: Spacing.lg }]}>
             Who are you playing?
