@@ -14,17 +14,15 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File as ExpoFile, Directory, Paths } from 'expo-file-system';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Purchases from 'react-native-purchases';
 import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
 import { extractPdfText } from '../modules/pdf-text-extractor/src';
 import { parseScript } from '@/lib/claude';
-import { parseScriptViaBackend, getTierForLength, TierInfo } from '@/lib/backend';
 import { saveScript, getScript, getSettings } from '@/lib/storage';
 import { Script } from '@/types';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 
-type Step = 'pick' | 'title' | 'pricing' | 'parsing' | 'character' | 'merge_confirm';
+type Step = 'pick' | 'title' | 'parsing' | 'character' | 'merge_confirm';
 
 export default function UploadScreen() {
   const router = useRouter();
@@ -39,10 +37,6 @@ export default function UploadScreen() {
   const [parsedScript, setParsedScript] = useState<Omit<Script, 'id' | 'createdAt' | 'selectedCharacter'> | null>(null);
   const [selectedCharacter, setSelectedCharacter] = useState('');
   const [statusText, setStatusText] = useState('');
-  const [extractedText, setExtractedText] = useState('');
-  const [tierInfo, setTierInfo] = useState<TierInfo | null>(null);
-  const [purchaseError, setPurchaseError] = useState('');
-  const [isPurchasing, setIsPurchasing] = useState(false);
 
   useEffect(() => {
     if (appendToScriptId) getScript(appendToScriptId).then(setExistingScript);
@@ -106,20 +100,20 @@ export default function UploadScreen() {
         return;
       }
 
-      // Developer bypass: API key set → direct Anthropic call
-      if (settings.anthropicApiKey) {
-        setStatusText('Identifying characters and scenes...');
-        const result = await parseScript(settings.anthropicApiKey, scriptText, title);
-        setParsedScript(result);
-        setStep(appendToScriptId ? 'merge_confirm' : 'character');
+      // Parse with API key
+      if (!settings.anthropicApiKey) {
+        Alert.alert(
+          'API Key Required',
+          'Set your Anthropic API key in Settings to parse scripts. In-app purchases are not available in this version.'
+        );
+        setStep(appendToScriptId ? 'pick' : 'title');
         return;
       }
 
-      // IAP flow: no API key — show pricing
-      setExtractedText(scriptText);
-      const tier = getTierForLength(scriptText.length);
-      setTierInfo(tier);
-      setStep('pricing');
+      setStatusText('Identifying characters and scenes...');
+      const result = await parseScript(settings.anthropicApiKey, scriptText, title);
+      setParsedScript(result);
+      setStep(appendToScriptId ? 'merge_confirm' : 'character');
 
     } catch (err: any) {
       const msg: string = err.message ?? 'Something went wrong parsing the script.';
@@ -146,76 +140,6 @@ export default function UploadScreen() {
     }
   };
 
-  const handlePurchaseAndParse = async () => {
-    if (!tierInfo || isPurchasing) return;
-    setPurchaseError('');
-    setIsPurchasing(true);
-
-    try {
-      // Fetch the product directly from the App Store
-      const products = await Purchases.getProducts([tierInfo.productId]);
-      if (products.length === 0) {
-        throw new Error('This product is not available right now. Please try again later.');
-      }
-
-      // Initiate purchase
-      const { customerInfo } = await Purchases.purchaseStoreProduct(products[0]);
-
-      // Get RevenueCat anonymous device ID
-      const appUserId = await Purchases.getAppUserID();
-
-      // Parse via backend
-      setStep('parsing');
-      setStatusText('Identifying characters and scenes...');
-
-      const { script: parsedData, scriptToken } = await parseScriptViaBackend(
-        appUserId,
-        tierInfo.productId,
-        extractedText,
-        title
-      );
-
-      setParsedScript({ ...parsedData, scriptToken });
-      setStep(appendToScriptId ? 'merge_confirm' : 'character');
-
-    } catch (err: any) {
-      // User cancelled the purchase — go back quietly
-      if (err?.userCancelled) {
-        setIsPurchasing(false);
-        return;
-      }
-      setPurchaseError(err.message ?? 'Purchase failed. Please try again.');
-      setIsPurchasing(false);
-    }
-  };
-
-  const handleRestoreAndParse = async () => {
-    if (!tierInfo || isPurchasing) return;
-    setPurchaseError('');
-    setIsPurchasing(true);
-
-    try {
-      await Purchases.restorePurchases();
-      const appUserId = await Purchases.getAppUserID();
-
-      setStep('parsing');
-      setStatusText('Identifying characters and scenes...');
-
-      const { script: parsedData, scriptToken } = await parseScriptViaBackend(
-        appUserId,
-        tierInfo.productId,
-        extractedText,
-        title
-      );
-
-      setParsedScript({ ...parsedData, scriptToken });
-      setStep(appendToScriptId ? 'merge_confirm' : 'character');
-
-    } catch (err: any) {
-      setPurchaseError(err.message ?? 'Restore failed. Please try again.');
-      setIsPurchasing(false);
-    }
-  };
 
   // Auto-trigger parse when entering 'parsing' step in append mode
   useEffect(() => {
@@ -350,52 +274,6 @@ export default function UploadScreen() {
         </View>
       )}
 
-      {step === 'pricing' && tierInfo && (
-        <View style={styles.form}>
-          <Text style={styles.stepTitle}>One-time purchase</Text>
-          <Text style={styles.stepSub}>
-            Script parsing uses AI and is charged once per script. Practice as many times as you like after.
-          </Text>
-
-          <Card style={styles.tierCard}>
-            <View style={styles.tierHeader}>
-              <Ionicons name="document-text-outline" size={24} color={Colors.accent} />
-              <View style={styles.tierInfo}>
-                <Text style={styles.tierLabel}>{title}</Text>
-                <Text style={styles.tierSize}>{tierInfo.label}</Text>
-              </View>
-              <Text style={styles.tierPrice}>{tierInfo.price}</Text>
-            </View>
-            <Text style={styles.tierNote}>
-              One-time charge · Unlimited practice after purchase
-            </Text>
-          </Card>
-
-          {purchaseError ? (
-            <Text style={styles.errorText}>{purchaseError}</Text>
-          ) : null}
-
-          <Button
-            label={`Buy for ${tierInfo.price}`}
-            onPress={handlePurchaseAndParse}
-            loading={isPurchasing}
-            disabled={isPurchasing}
-            style={styles.actionBtn}
-          />
-          <Button
-            label="Restore Previous Purchase"
-            variant="ghost"
-            onPress={handleRestoreAndParse}
-            disabled={isPurchasing}
-          />
-          <Button
-            label="Cancel"
-            variant="secondary"
-            onPress={() => setStep('title')}
-            disabled={isPurchasing}
-          />
-        </View>
-      )}
 
       {step === 'parsing' && (
         <View style={styles.centered}>
