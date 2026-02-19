@@ -17,9 +17,13 @@ let activeSound: Audio.Sound | null = null;
  * Ensures the audio directory exists, creating it if necessary.
  */
 export async function ensureAudioDir(): Promise<void> {
-  const dirInfo = await FileSystem.getInfoAsync(AUDIO_DIR);
-  if (!dirInfo.exists) {
+  try {
     await FileSystem.makeDirectoryAsync(AUDIO_DIR, { intermediates: true });
+  } catch (err: any) {
+    // Directory already exists or other error - that's fine
+    if (!err.message?.includes('already exists')) {
+      console.warn('Error creating audio directory:', err);
+    }
   }
 }
 
@@ -88,26 +92,32 @@ export async function stopRecording(recording: Audio.Recording): Promise<Recordi
     throw new Error('Recording failed to produce a URI');
   }
 
-  // Get file info
-  const fileInfo = await FileSystem.getInfoAsync(uri);
-  if (!fileInfo.exists) {
-    throw new Error('Recording file does not exist');
-  }
-
   // Generate unique filename and move to audio directory
   const filename = `${generateUniqueId()}.m4a`;
   const destUri = AUDIO_DIR + filename;
 
-  await FileSystem.moveAsync({
-    from: uri,
-    to: destUri,
-  });
+  try {
+    await FileSystem.moveAsync({
+      from: uri,
+      to: destUri,
+    });
+  } catch (err) {
+    throw new Error('Failed to save recording: ' + (err as any).message);
+  }
 
   // Get duration and file size
   const recordingStatus = await recording.getStatusAsync();
   const durationMs = recordingStatus.durationMillis ?? 0;
-  const finalInfo = await FileSystem.getInfoAsync(destUri);
-  const bytes = finalInfo.size ?? 0;
+  let bytes = 0;
+  try {
+    const finalInfo = await FileSystem.getInfoAsync(destUri);
+    if (typeof finalInfo === 'object' && 'size' in finalInfo) {
+      bytes = (finalInfo as any).size ?? 0;
+    }
+  } catch (err) {
+    // Couldn't get file size, but recording was saved - continue
+    console.warn('Could not determine file size:', err);
+  }
 
   return {
     uri: destUri,
@@ -186,11 +196,11 @@ export async function checkStorageLimit(): Promise<StorageStatus> {
       const fileUri = AUDIO_DIR + file;
       try {
         const info = await FileSystem.getInfoAsync(fileUri);
-        if (info.size) {
-          totalBytes += info.size;
+        if (typeof info === 'object' && 'size' in info) {
+          totalBytes += (info as any).size ?? 0;
         }
       } catch {
-        // Skip files that error
+        // Skip files that error or can't be read
       }
     }
 
@@ -233,14 +243,12 @@ export async function deleteAudioFile(uri: string): Promise<void> {
  */
 export async function deleteAllAudio(): Promise<void> {
   try {
-    const info = await FileSystem.getInfoAsync(AUDIO_DIR);
-    if (info.exists) {
-      await FileSystem.deleteAsync(AUDIO_DIR);
-    }
-    await ensureAudioDir();
+    await FileSystem.deleteAsync(AUDIO_DIR);
   } catch (err) {
-    console.warn('Failed to delete all audio:', err);
+    // Directory might not exist - that's fine
+    console.warn('Could not delete audio directory:', err);
   }
+  await ensureAudioDir();
 }
 
 /**
