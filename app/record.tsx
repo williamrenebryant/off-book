@@ -97,7 +97,7 @@ export default function RecordScreen() {
   // Handle adding character
   const handleAddCharacter = () => {
     if (!characterInput.trim()) return;
-    const char = characterInput.trim().toUpperCase();
+    const char = characterInput.trim();
     if (!characters.includes(char)) {
       setCharacters([...characters, char]);
     }
@@ -816,6 +816,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: Spacing.sm,
   },
   charBtnActive: {
     backgroundColor: Colors.accentDark,
@@ -825,6 +826,8 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     fontWeight: '700',
     color: Colors.white,
+    textAlign: 'center',
+    lineHeight: FontSize.md * 1.2,
   },
   charBtnTextActive: {
     color: Colors.white,
