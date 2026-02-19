@@ -470,10 +470,14 @@ export default function RecordScreen() {
                 ]}
                 onPress={() => handleStartRecording(char)}
               >
-                <Text style={[
-                  styles.charBtnText,
-                  activeCharacter === char && styles.charBtnTextActive,
-                ]}>
+                <Text
+                  style={[
+                    styles.charBtnText,
+                    activeCharacter === char && styles.charBtnTextActive,
+                  ]}
+                  allowFontScaling={false}
+                  maxFontSizeMultiplier={1}
+                >
                   {char}
                 </Text>
               </TouchableOpacity>
@@ -810,13 +814,12 @@ const styles = StyleSheet.create({
   },
   charBtn: {
     flex: 0.5,
-    aspectRatio: 1,
+    minHeight: 80,
     borderRadius: Radius.lg,
     backgroundColor: Colors.accent,
     borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Spacing.sm,
   },
   charBtnActive: {
     backgroundColor: Colors.accentDark,
@@ -827,7 +830,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.white,
     textAlign: 'center',
-    lineHeight: FontSize.md * 1.2,
   },
   charBtnTextActive: {
     color: Colors.white,
