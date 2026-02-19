@@ -85,7 +85,7 @@ interface RecordingResult {
  * Stops the recording, saves it to the audio directory, and returns metadata.
  */
 export async function stopRecording(recording: Audio.Recording): Promise<RecordingResult> {
-  await recording.stopAsync();
+  await recording.stopAndUnloadAsync();
   const uri = recording.getURI();
 
   if (!uri) {
