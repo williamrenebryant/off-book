@@ -14,6 +14,7 @@ import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
 import { getScripts, deleteScript } from '@/lib/storage';
 import { Script } from '@/types';
 import Card from '@/components/ui/Card';
+import Logo from '@/components/ui/Logo';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -75,8 +76,13 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Cue Line</Text>
-        <Text style={styles.subtitle}>Your scripts</Text>
+        <View style={styles.headerTop}>
+          <Logo size={50} />
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Cue Line</Text>
+            <Text style={styles.subtitle}>Your scripts</Text>
+          </View>
+        </View>
       </View>
 
       {scripts.length === 0 ? (
@@ -119,6 +125,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.md,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  headerText: {
+    flex: 1,
   },
   title: {
     fontSize: FontSize.xxxl,
