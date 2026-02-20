@@ -121,3 +121,11 @@ export function splitIntoChunks(text: string): string[] {
 export function isChunkable(text: string): boolean {
   return splitIntoChunks(text).length >= 2;
 }
+
+// Check if a line is long but lacks punctuation (suggesting actor didn't break it up)
+export function needsPunctuationTip(text: string): boolean {
+  // Only show tip if line is long (15+ words) and doesn't have sentence-ending punctuation
+  const wordCount = text.trim().split(/\s+/).length;
+  const hasSentenceBreaks = /[.!?]/.test(text);
+  return wordCount >= 15 && !hasSentenceBreaks;
+}

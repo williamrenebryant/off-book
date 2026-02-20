@@ -23,7 +23,7 @@ import { getScript, getProgress, saveProgress, initProgress, getSettings, saveSe
 import { getHint, getCoachingQuestion } from '@/lib/claude';
 import { playAudio, stopAudio } from '@/lib/audio';
 import { getHintViaBackend, getCoachingViaBackend } from '@/lib/backend';
-import { evaluateLineLocally, splitIntoChunks, isChunkable } from '@/lib/compare';
+import { evaluateLineLocally, splitIntoChunks, isChunkable, needsPunctuationTip } from '@/lib/compare';
 import { Script, Scene, Line, ScriptProgress, LineProgress, FeedbackResult, AppSettings } from '@/types';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -1441,6 +1441,16 @@ export default function PracticeScreen() {
                 </Card>
               )}
 
+              {/* Tip for long lines without punctuation */}
+              {!chunkMode && currentLine && needsPunctuationTip(currentLine.text) && (
+                <Card style={styles.tipCard}>
+                  <Ionicons name="bulb-outline" size={16} color={Colors.accent} />
+                  <Text style={styles.tipText}>
+                    💡 <Text style={styles.tipBold}>Long line tip:</Text> If you'd like to practice this in sections later, try adding punctuation (periods, commas) to show where the sentence breaks should be.
+                  </Text>
+                </Card>
+              )}
+
               {showLine || feedback.score < 60 ? (
                 <Card style={styles.actualLineCard}>
                   <Text style={styles.actualLineLabel}>The line</Text>
@@ -2362,5 +2372,21 @@ const styles = StyleSheet.create({
   },
   chunkTargetText: {
     fontSize: FontSize.lg, color: Colors.text, lineHeight: 26,
+  },
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.accent,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.text,
+    lineHeight: 20,
+  },
+  tipBold: {
+    fontWeight: '700',
   },
 });
