@@ -1,7 +1,7 @@
-import { Script, Scene, Line, FeedbackResult } from '@/types';
+import { Script, Scene, Line } from '@/types';
+import { getModel, DEV_SETTINGS } from '@/lib/config';
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com/v1/messages';
-const SONNET = 'claude-sonnet-4-6';
 
 function xhrPost(url: string, headers: Record<string, string>, body: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -24,8 +24,15 @@ async function callClaude(
   apiKey: string,
   messages: object[],
   systemPrompt: string,
-  maxTokens = 4096
+  maxTokens = 4096,
+  model?: string
 ): Promise<string> {
+  const selectedModel = model || getModel('eval');
+
+  if (DEV_SETTINGS.logApiCalls) {
+    console.log(`[Claude API] Model: ${selectedModel}, Tokens: ${maxTokens}`);
+  }
+
   const raw = await xhrPost(
     ANTHROPIC_BASE,
     {
@@ -34,7 +41,7 @@ async function callClaude(
       'anthropic-version': '2023-06-01',
     },
     JSON.stringify({
-      model: SONNET,
+      model: selectedModel,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages,
@@ -108,7 +115,7 @@ If there are no clear scene breaks, put everything in one scene.
 Script text:
 ${scriptText.slice(0, 50000)}`; // limit to avoid token overflow
 
-  const raw = await callClaude(apiKey, [{ role: 'user', content: prompt }], system, 32000);
+  const raw = await callClaude(apiKey, [{ role: 'user', content: prompt }], system, 32000, getModel('analysis'));
 
   // Strip any markdown code blocks if Claude added them
   const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
@@ -139,51 +146,6 @@ ${scriptText.slice(0, 50000)}`; // limit to avoid token overflow
   return { ...parsed, scenes: scenesWithCues };
 }
 
-// --- Line Feedback ---
-
-export async function evaluateLine(
-  apiKey: string,
-  spokenText: string,
-  correctText: string,
-  character: string,
-  context: string
-): Promise<FeedbackResult> {
-  const system = `You are a supportive acting coach helping an actor memorize their lines.
-Be encouraging but precise. Focus on what matters for performance memorization.`;
-
-  const prompt = `An actor is memorizing lines for the character "${character}".
-
-Correct line: "${correctText}"
-What the actor said: "${spokenText}"
-Scene context: ${context}
-
-IMPORTANT: The actor's text was captured by speech-to-text, which never includes punctuation. Ignore ALL punctuation differences (missing commas, periods, exclamation marks, question marks, etc.) completely — they should have zero effect on the score.
-
-Evaluate their attempt and respond with ONLY valid JSON in this format:
-{
-  "accurate": true/false,
-  "score": 0-100,
-  "feedback": "Brief, warm feedback (1-2 sentences)",
-  "corrections": "Only include if score < 90: specifically what words were wrong or missing (never mention punctuation)",
-  "hint": "Only include if score < 50: a helpful hint (first few words, or a clue about the line)"
-}
-
-Score guidelines (punctuation differences never affect score):
-- 95-100: Word-perfect or only trivial differences (articles, minor word order)
-- 80-94: Got the gist, minor word substitutions that don't change meaning
-- 60-79: Correct meaning but notable word differences
-- 40-59: Partial recall, got part of the line
-- 0-39: Significantly off or wrong line entirely`;
-
-  const raw = await callClaude(apiKey, [{ role: 'user', content: prompt }], system, 512);
-  const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    throw new Error(`Failed to parse evaluation JSON from Claude: ${cleaned.slice(0, 200)}`);
-  }
-}
-
 // --- Coaching Questions ---
 
 export async function getCoachingQuestion(
@@ -192,6 +154,11 @@ export async function getCoachingQuestion(
   lineText: string,
   sceneContext: string
 ): Promise<string> {
+  // Skip coaching questions during development to save costs
+  if (DEV_SETTINGS.skipCoachingQuestions) {
+    return 'What does your character want in this moment?'; // Generic fallback
+  }
+
   const system = `You are a thoughtful acting teacher using the Stanislavski method.
 You ask questions that help actors discover meaning, not answers that tell them what to feel.
 Your questions are concise, Socratic, and open-ended.`;
@@ -203,7 +170,7 @@ Scene: ${sceneContext}
 
 Ask ONE brief, Socratic question (1-2 sentences max) that would help them find the motivation or subtext for this line. Do NOT answer the question. Do NOT explain the line. Just ask the question.`;
 
-  return callClaude(apiKey, [{ role: 'user', content: prompt }], system, 150);
+  return callClaude(apiKey, [{ role: 'user', content: prompt }], system, 150, getModel('eval'));
 }
 
 // --- Hint Generation ---
@@ -224,6 +191,7 @@ export async function getHint(
     apiKey,
     [{ role: 'user', content: hints[hintLevel] }],
     'You provide memorization hints for actors. Be precise and brief.',
-    100
+    100,
+    getModel('eval')
   );
 }

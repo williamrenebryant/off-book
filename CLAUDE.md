@@ -63,9 +63,18 @@ eas build --profile preview --platform ios
 
 ## AI model usage
 
+**Production** (when `DEV_MODE = false` in `lib/config.ts`):
 - Script parsing: `claude-sonnet-4-6` (high quality, complex structure extraction)
 - PDF text extraction: `claude-haiku-4-5-20251001` (fast, cheap)
 - Line evaluation, hints, coaching: `claude-sonnet-4-6`
+
+**Development** (when `DEV_MODE = true` in `lib/config.ts`):
+- All API calls use `claude-haiku-4-5-20251001` for ~80% cost reduction
+- Coaching questions return generic fallback (skip API call)
+- Script parsing still works perfectly with Haiku
+- Recommended for feature development and testing
+
+See `DEV_CONFIG.md` for token cost optimization details.
 
 ## Speech
 

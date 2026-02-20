@@ -20,34 +20,35 @@ import {
 } from 'expo-speech-recognition';
 import { Colors, Spacing, FontSize, Radius } from '@/constants/theme';
 import { getScript, getProgress, saveProgress, initProgress, getSettings, saveSettings, saveScript } from '@/lib/storage';
-import { evaluateLine, getHint, getCoachingQuestion } from '@/lib/claude';
+import { getHint, getCoachingQuestion } from '@/lib/claude';
 import { playAudio, stopAudio } from '@/lib/audio';
-import { evaluateLineViaBackend, getHintViaBackend, getCoachingViaBackend } from '@/lib/backend';
+import { getHintViaBackend, getCoachingViaBackend } from '@/lib/backend';
+import { evaluateLineLocally, splitIntoChunks, isChunkable } from '@/lib/compare';
 import { Script, Scene, Line, ScriptProgress, LineProgress, FeedbackResult, AppSettings } from '@/types';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import ProgressBar from '@/components/ui/ProgressBar';
 
-// Returns what fraction of the correct line's words appear in the spoken text.
-// Ignores punctuation and case. Used for fuzzy pre-screening and picking the
-// best alternative from speech recognition.
-function wordSimilarity(spoken: string, correct: string): number {
-  const normalize = (s: string) =>
-    s.toLowerCase().replace(/[^\w\s]/g, '').trim().split(/\s+/).filter(Boolean);
-  const spokenWords = normalize(spoken);
-  const correctWords = normalize(correct);
-  if (correctWords.length === 0) return 1;
-  if (spokenWords.length === 0) return 0;
-  const spokenSet = new Set(spokenWords);
-  return correctWords.filter(w => spokenSet.has(w)).length / correctWords.length;
-}
-
 // Given multiple STT alternatives, return the one that best matches the correct line.
 function pickBestAlternative(alternatives: string[], correctText: string): string {
   if (alternatives.length <= 1) return alternatives[0] ?? '';
   return alternatives.reduce((best, alt) =>
-    wordSimilarity(alt, correctText) > wordSimilarity(best, correctText) ? alt : best
+    evaluateLineLocally(alt, correctText).score > evaluateLineLocally(best, correctText).score ? alt : best
   );
+}
+
+function buildContextualStrings(script: Script, character: string | null, scene: Scene): string[] {
+  const wordSet = new Set<string>();
+  const addWords = (text: string) => {
+    text.toLowerCase().replace(/[^\w\s']/g, '').split(/\s+/).filter(Boolean).forEach(w => wordSet.add(w));
+  };
+  // Character's own lines first (most important)
+  scene.lines.filter(l => l.character === character).forEach(l => addWords(l.text));
+  // Character names
+  script.characters.forEach(c => c.split(/\s+/).filter(Boolean).forEach(p => wordSet.add(p.toLowerCase())));
+  // Cue lines
+  scene.lines.filter(l => l.character !== character).forEach(l => addWords(l.text));
+  return Array.from(wordSet).slice(0, 100); // Apple recommends ≤100 contextual strings
 }
 
 interface SceneModeConfig {
@@ -107,6 +108,15 @@ export default function PracticeScreen() {
   const [cueMode, setCueMode] = useState<'text' | 'audio'>('text');
   const [showLineNavigator, setShowLineNavigator] = useState(false);
 
+  const [chunkMode, setChunkMode] = useState(false);
+  const chunkModeRef = useRef(false);
+
+  const [chunks, setChunks] = useState<string[]>([]);
+  const chunksRef = useRef<string[]>([]);
+
+  const [chunkStage, setChunkStage] = useState(1);
+  const chunkStageRef = useRef(1);
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseRef = useRef<Animated.CompositeAnimation | null>(null);
 
@@ -127,6 +137,7 @@ export default function PracticeScreen() {
   // Accumulated transcript across STT restarts (iOS stops on silence even with continuous: true)
   const accumulatedTranscriptRef = useRef('');
   const langRef = useRef('en-US');
+  const contextualStringsRef = useRef<string[]>([]);
 
   // Timing
   const listeningStartRef = useRef<number | null>(null);
@@ -223,6 +234,7 @@ export default function PracticeScreen() {
           interimResults: true,
           maxAlternatives: 3,
           continuous: true,
+          contextualStrings: contextualStringsRef.current,
         });
         return;
       }
@@ -241,12 +253,15 @@ export default function PracticeScreen() {
       if (fullText) {
         // For accumulated multi-segment text, skip per-segment alternatives and
         // evaluate the full string directly.
+        const correctForAltPick = chunkModeRef.current
+          ? chunksRef.current.slice(0, chunkStageRef.current).join(' ')
+          : currentLineRef.current?.text ?? '';
         const textToEval = accumulated
           ? fullText
           : (() => {
               const alts = allAlternativesRef.current;
               return alts.length > 1 && currentLineRef.current
-                ? pickBestAlternative(alts, currentLineRef.current.text)
+                ? pickBestAlternative(alts, correctForAltPick)
                 : fullText;
             })();
         setTranscript(textToEval);
@@ -302,6 +317,7 @@ export default function PracticeScreen() {
             ? 'test' : 'practice';
         });
         setLineModes(modes);
+        contextualStringsRef.current = buildContextualStrings(s, s.selectedCharacter, foundScene);
 
         const firstMode = modes[lines[0]?.id] ?? 'practice';
         setPracticeStateAndRef(firstMode === 'test' ? 'cue' : 'practice_idle');
@@ -320,6 +336,12 @@ export default function PracticeScreen() {
 
   const currentLine = myLines[currentIndex];
   const currentMode = lineModes[currentLine?.id ?? ''] ?? 'practice';
+
+  const chunkTarget: string = chunkMode
+    ? chunks.slice(0, chunkStage).join(' ')
+    : (currentLine?.text ?? '');
+
+  const isLastChunkStage: boolean = chunkStage >= chunks.length;
 
   const startListening = async (mode: 'practice' | 'test') => {
     const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -360,6 +382,7 @@ export default function PracticeScreen() {
       interimResults: true,
       maxAlternatives: 3,
       continuous: true,
+      contextualStrings: contextualStringsRef.current,
     });
   };
 
@@ -428,6 +451,9 @@ export default function PracticeScreen() {
       setHintLevel(0);
       setShowLine(false);
       setCoachingQuestion('');
+      setChunkMode(false); chunkModeRef.current = false;
+      setChunks([]); chunksRef.current = [];
+      setChunkStage(1); chunkStageRef.current = 1;
       setPracticeStateAndRef('cue');
     }
   };
@@ -471,6 +497,7 @@ export default function PracticeScreen() {
             setMyLines(newLines);
             myLinesRef.current = newLines;
             allMyLinesRef.current = newLines;
+            contextualStringsRef.current = buildContextualStrings(updated, char, foundScene);
             setCurrentIndex(0);
             currentIndexRef.current = 0;
             setFeedback(null);
@@ -479,6 +506,9 @@ export default function PracticeScreen() {
             setHintLevel(0);
             setShowLine(false);
             setCoachingQuestion('');
+            setChunkMode(false); chunkModeRef.current = false;
+            setChunks([]); chunksRef.current = [];
+            setChunkStage(1); chunkStageRef.current = 1;
             setPracticeStateAndRef('practice_idle');
           }
         },
@@ -495,79 +525,47 @@ export default function PracticeScreen() {
     stopPulse();
     setPracticeStateAndRef('evaluating');
 
+    const isInChunkMode = chunkModeRef.current;
+    const currentChunks = chunksRef.current;
+    const currentStage = chunkStageRef.current;
+    const target = isInChunkMode
+      ? currentChunks.slice(0, currentStage).join(' ')
+      : currentLineRef.current.text;
+
     try {
-      const context = scene?.title ?? '';
-      let result: FeedbackResult;
-
-      // Fuzzy pre-screen: if the spoken text covers ≥90% of the correct line's
-      // words, auto-pass without an API call. Also check against the stored
-      // practice transcript in case the actor's pronunciation is consistently
-      // different from the written text (e.g. accents, contractions).
-      const lineProgress = progress?.sceneProgress[sceneId]?.lineProgress[currentLineRef.current.id];
-      const practiceRef = lineProgress?.practiceTranscript;
-      const directSimilarity = wordSimilarity(spokenText, currentLineRef.current.text);
-      const practiceSimilarity = practiceRef
-        ? wordSimilarity(spokenText, practiceRef) * wordSimilarity(practiceRef, currentLineRef.current.text)
-        : 0;
-
-      if (directSimilarity >= 1.0) {
-        result = { accurate: true, score: 100, feedback: 'Perfect!' };
-      } else if (directSimilarity >= 0.9 || practiceSimilarity >= 0.82) {
-        result = { accurate: true, score: 96, feedback: 'Nailed it!' };
-      } else if (settings?.anthropicApiKey) {
-        result = await evaluateLine(
-          settings.anthropicApiKey,
-          spokenText,
-          currentLineRef.current.text,
-          script?.selectedCharacter ?? '',
-          context
-        );
-      } else if (script?.scriptToken) {
-        result = await evaluateLineViaBackend(
-          script.scriptToken,
-          spokenText,
-          currentLineRef.current.text,
-          script?.selectedCharacter ?? '',
-          context
-        );
-      } else {
-        Alert.alert(
-          'Setup Required',
-          'This script was added before in-app purchases were available. Please add your Anthropic API key in Settings, or delete and re-upload this script.',
-          [{ text: 'OK' }]
-        );
-        setPracticeStateAndRef('cue');
-        return;
-      }
-
+      const result: FeedbackResult = evaluateLineLocally(spokenText, target);
       setFeedback(result);
       setHintText('');
       setHintLevel(0);
       setShowLine(false);
       setPracticeStateAndRef('feedback');
-      updateLineProgress(currentLineRef.current.id, {
-        attempts: (progress?.sceneProgress[sceneId]?.lineProgress[currentLineRef.current.id]?.attempts ?? 0) + 1,
-        correctAttempts: (progress?.sceneProgress[sceneId]?.lineProgress[currentLineRef.current.id]?.correctAttempts ?? 0) + (result.score >= 90 ? 1 : 0),
-        mastered: ((progress?.sceneProgress[sceneId]?.lineProgress[currentLineRef.current.id]?.correctAttempts ?? 0) + (result.score >= 90 ? 1 : 0)) >= 3,
-      });
 
-      // Scene mode: record result and handle auto-advance
-      const cfg = sceneConfigRef.current;
-      if (cfg && currentLineRef.current) {
-        const smResult: SceneModeResult = {
-          lineId: currentLineRef.current.id,
-          lineText: currentLineRef.current.text,
-          spokenText,
-          score: result.score,
-          feedback: result.feedback,
-        };
-        setSceneModeResults(prev => [...prev, smResult]);
+      // Only save line progress at the final (full-line) stage
+      const isFinalStage = !isInChunkMode || currentStage >= currentChunks.length;
+      if (isFinalStage) {
+        updateLineProgress(currentLineRef.current.id, {
+          attempts: (progress?.sceneProgress[sceneId]?.lineProgress[currentLineRef.current.id]?.attempts ?? 0) + 1,
+          correctAttempts: (progress?.sceneProgress[sceneId]?.lineProgress[currentLineRef.current.id]?.correctAttempts ?? 0) + (result.score >= 90 ? 1 : 0),
+          mastered: ((progress?.sceneProgress[sceneId]?.lineProgress[currentLineRef.current.id]?.correctAttempts ?? 0) + (result.score >= 90 ? 1 : 0)) >= 3,
+        });
+      }
 
-        // Flow: always auto-advance after 1.5s
-        // Drill: auto-advance only if at or above threshold; otherwise wait for user
-        if (cfg.type === 'flow' || result.score >= cfg.threshold) {
-          setAutoAdvancing(true);
-          autoAdvanceTimerRef.current = setTimeout(advanceToNextLine, 1500);
+      // Scene-mode auto-advance only runs outside chunk mode
+      if (!isInChunkMode) {
+        const cfg = sceneConfigRef.current;
+        if (cfg && currentLineRef.current) {
+          const smResult: SceneModeResult = {
+            lineId: currentLineRef.current.id,
+            lineText: currentLineRef.current.text,
+            spokenText,
+            score: result.score,
+            feedback: result.feedback,
+          };
+          setSceneModeResults(prev => [...prev, smResult]);
+          if (cfg.type === 'flow' || result.score >= cfg.threshold) {
+            setAutoAdvancing(true);
+            autoAdvanceTimerRef.current = setTimeout(advanceToNextLine, 1500);
+          }
         }
       }
     } catch (err: any) {
@@ -618,6 +616,9 @@ export default function PracticeScreen() {
     setHintLevel(0);
     setShowLine(false);
     setCoachingQuestion('');
+    setChunkMode(false); chunkModeRef.current = false;
+    setChunks([]); chunksRef.current = [];
+    setChunkStage(1); chunkStageRef.current = 1;
     setPracticeStateAndRef('cue');
   };
 
@@ -649,6 +650,9 @@ export default function PracticeScreen() {
     setHintLevel(0);
     setShowLine(false);
     setCoachingQuestion('');
+    setChunkMode(false); chunkModeRef.current = false;
+    setChunks([]); chunksRef.current = [];
+    setChunkStage(1); chunkStageRef.current = 1;
     setPracticeStateAndRef('cue');
   };
 
@@ -675,6 +679,9 @@ export default function PracticeScreen() {
     setHintLevel(0);
     setShowLine(false);
     setCoachingQuestion('');
+    setChunkMode(false); chunkModeRef.current = false;
+    setChunks([]); chunksRef.current = [];
+    setChunkStage(1); chunkStageRef.current = 1;
     setPracticeStateAndRef('cue');
   };
 
@@ -712,6 +719,9 @@ export default function PracticeScreen() {
       setHintLevel(0);
       setShowLine(false);
       setCoachingQuestion('');
+      setChunkMode(false); chunkModeRef.current = false;
+      setChunks([]); chunksRef.current = [];
+      setChunkStage(1); chunkStageRef.current = 1;
       const nextLineId = myLines[nextIndex].id;
       const nextMode = sceneConfig ? 'test' : (lineModes[nextLineId] ?? 'practice');
       setPracticeStateAndRef(nextMode === 'test' ? 'cue' : 'practice_idle');
@@ -722,25 +732,59 @@ export default function PracticeScreen() {
     if (!currentLine) return;
     const nextLevel = Math.min(3, hintLevel + 1) as 1 | 2 | 3;
     setHintLevel(nextLevel);
-    const words = currentLine.text.split(' ');
+    const source = chunkModeRef.current
+      ? chunksRef.current.slice(0, chunkStageRef.current).join(' ')
+      : currentLine.text;
+    const words = source.split(' ');
     if (nextLevel === 1) {
       setHintText(words.slice(0, 3).join(' ') + '...');
     } else if (nextLevel === 2) {
       setHintText(words.slice(0, Math.ceil(words.length / 2)).join(' ') + '...');
     } else {
-      setHintText(currentLine.text);
+      setHintText(source);
     }
   };
 
   const handleCallForLine = () => {
     if (!currentLine) return;
-    const words = currentLine.text.split(' ');
+    const source = chunkModeRef.current
+      ? chunksRef.current.slice(0, chunkStageRef.current).join(' ')
+      : currentLine.text;
+    const words = source.split(' ');
     setHintText(words.slice(0, 3).join(' ') + '...');
     setHintLevel(1);
     if (practiceStateRef.current === 'listening') {
       calledForLineRef.current = true;
       stopListening();
     }
+  };
+
+  const enterChunkMode = () => {
+    if (!currentLine) return;
+    const pieces = splitIntoChunks(currentLine.text);
+    if (pieces.length < 2) return;
+    setChunks(pieces); chunksRef.current = pieces;
+    setChunkStage(1); chunkStageRef.current = 1;
+    setChunkMode(true); chunkModeRef.current = true;
+    setHintText(''); setHintLevel(0); setShowLine(false);
+    setCoachingQuestion(''); setFeedback(null); setTranscript('');
+  };
+
+  const advanceChunkStage = () => {
+    const next = chunkStageRef.current + 1;
+    setChunkStage(next); chunkStageRef.current = next;
+    setFeedback(null); setTranscript('');
+    setHintText(''); setHintLevel(0); setShowLine(false);
+    setPracticeStateAndRef('cue');
+  };
+
+  const exitChunkMode = () => {
+    setChunkMode(false); chunkModeRef.current = false;
+    setChunks([]); chunksRef.current = [];
+    setChunkStage(1); chunkStageRef.current = 1;
+    setFeedback(null); setTranscript('');
+    setHintText(''); setHintLevel(0); setShowLine(false);
+    setPracticeStateAndRef('cue');
   };
 
   const handleSpeakCue = (text: string) => {
@@ -828,6 +872,9 @@ export default function PracticeScreen() {
       setHintLevel(0);
       setShowLine(false);
       setCoachingQuestion('');
+      setChunkMode(false); chunkModeRef.current = false;
+      setChunks([]); chunksRef.current = [];
+      setChunkStage(1); chunkStageRef.current = 1;
       setPracticeStateAndRef('cue');
       setShowLineNavigator(false);
     }
@@ -1295,16 +1342,40 @@ export default function PracticeScreen() {
           {/* TEST MODE: cue */}
           {practiceState === 'cue' && (
             <>
-              {hintText ? (
+              {/* Offer chunk mode for long lines — never in scene mode */}
+              {!chunkMode && !sceneConfig && currentLine && isChunkable(currentLine.text) && (
+                <TouchableOpacity onPress={enterChunkMode} style={styles.chunkBanner} activeOpacity={0.8}>
+                  <Ionicons name="git-branch-outline" size={14} color={Colors.accent} />
+                  <Text style={styles.chunkBannerText}>Long line — practice by sentence</Text>
+                  <Ionicons name="chevron-forward" size={14} color={Colors.accent} />
+                </TouchableOpacity>
+              )}
+
+              {/* Active chunk mode: show the current target + progress */}
+              {chunkMode && (
+                <Card style={styles.chunkTargetCard}>
+                  <View style={styles.chunkProgressRow}>
+                    <Text style={styles.chunkProgressLabel}>Part {chunkStage} of {chunks.length}</Text>
+                    <TouchableOpacity onPress={exitChunkMode}>
+                      <Text style={styles.chunkExitText}>Exit</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.chunkTargetText}>{chunkTarget}</Text>
+                </Card>
+              )}
+
+              {/* Hint / prompt — hidden in chunk mode (target card replaces it) */}
+              {!chunkMode && hintText ? (
                 <Card style={styles.hintCard}>
                   <Text style={styles.hintLabel}>
                     {hintLevel === 1 ? 'First few words' : hintLevel === 2 ? 'First half' : 'Full line'}
                   </Text>
                   <Text style={styles.hintText}>{hintText}</Text>
                 </Card>
-              ) : (
+              ) : !chunkMode ? (
                 <Text style={styles.yourTurnPrompt}>Your turn — when you're ready, tap to speak</Text>
-              )}
+              ) : null}
+
               {coachingQuestion ? (
                 <Card style={styles.coachCard}>
                   <Ionicons name="help-circle-outline" size={16} color={Colors.accent} />
@@ -1373,9 +1444,9 @@ export default function PracticeScreen() {
               {showLine || feedback.score < 60 ? (
                 <Card style={styles.actualLineCard}>
                   <Text style={styles.actualLineLabel}>The line</Text>
-                  <Text style={styles.actualLineText}>{currentLine?.text}</Text>
+                  <Text style={styles.actualLineText}>{chunkMode ? chunkTarget : currentLine?.text}</Text>
                   <TouchableOpacity
-                    onPress={() => handleSpeakCue(currentLine?.text ?? '')}
+                    onPress={() => handleSpeakCue(chunkMode ? chunkTarget : (currentLine?.text ?? ''))}
                     style={styles.speakLineBtn}
                   >
                     <Ionicons name="volume-high-outline" size={16} color={Colors.accent} />
@@ -1476,7 +1547,26 @@ export default function PracticeScreen() {
         {/* FEEDBACK controls */}
         {practiceState === 'feedback' && (
           <View style={styles.feedbackControls}>
-            {sceneConfig?.type === 'flow' ? (
+            {chunkMode ? (
+              feedback && feedback.score >= 80 ? (
+                isLastChunkStage ? (
+                  // Passed final stage: normal Try Again + Next Line
+                  <>
+                    <Button label="Try Again" variant="secondary" onPress={() => { setFeedback(null); setTranscript(''); setShowLine(false); setPracticeStateAndRef('cue'); }} />
+                    <Button label="Next Line" onPress={handleNext} />
+                  </>
+                ) : (
+                  // Passed intermediate stage: offer graduation
+                  <>
+                    <Button label="Try Again" variant="secondary" onPress={() => { setFeedback(null); setTranscript(''); setShowLine(false); setPracticeStateAndRef('cue'); }} />
+                    <Button label={`Ready for Part ${chunkStage + 1}?`} variant="accent" onPress={advanceChunkStage} />
+                  </>
+                )
+              ) : (
+                // Failed: Try Again only
+                <Button label="Try Again" onPress={() => { setFeedback(null); setTranscript(''); setShowLine(false); setPracticeStateAndRef('cue'); }} />
+              )
+            ) : sceneConfig?.type === 'flow' ? (
               // Flow mode: single Next Line button (tap to advance early)
               <Button label="Next Line" onPress={handleNext} />
             ) : sceneConfig?.type === 'drill' && feedback && feedback.score < sceneConfig.threshold ? (
@@ -2247,5 +2337,30 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     paddingHorizontal: Spacing.lg,
     gap: Spacing.sm,
+  },
+  chunkBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+    paddingVertical: Spacing.xs + 2, paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.surface, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.accent, alignSelf: 'flex-start',
+  },
+  chunkBannerText: {
+    fontSize: FontSize.sm, color: Colors.accent, fontWeight: '600',
+  },
+  chunkTargetCard: {
+    borderLeftWidth: 3, borderLeftColor: Colors.purple, gap: Spacing.sm,
+  },
+  chunkProgressRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  chunkProgressLabel: {
+    fontSize: FontSize.xs, fontWeight: '700', color: Colors.purple,
+    textTransform: 'uppercase', letterSpacing: 0.5,
+  },
+  chunkExitText: {
+    fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: '600',
+  },
+  chunkTargetText: {
+    fontSize: FontSize.lg, color: Colors.text, lineHeight: 26,
   },
 });
